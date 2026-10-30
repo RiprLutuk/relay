@@ -1,0 +1,86 @@
+{
+  "name": "relay-workspace",
+  "displayName": "Relay Workspace",
+  "description": "Native VS Code companion for the Relay local AI workspace control plane.",
+  "version": "1.0.0",
+  "publisher": "relay-local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RiprLutuk/relay.git"
+  },
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "icon": "images/icon.png",
+  "main": "./out/workspace-companion.js",
+  "activationEvents": [
+    "*"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "relay.showActions",
+        "title": "Relay: Show Actions"
+      },
+      {
+        "command": "relay.check",
+        "title": "Relay: Check Control Plane",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "relay.start",
+        "title": "Relay: Start Control Plane"
+      },
+      {
+        "command": "relay.openBrowserExtension",
+        "title": "Relay: Open Browser Extensions"
+      },
+      {
+        "command": "relay.openControlCenter",
+        "title": "Relay: Open Control Center"
+      },
+      {
+        "command": "relay.selectControlPath",
+        "title": "Relay: Select Relay Binary"
+      },
+      {
+        "command": "relay.copyPairingToken",
+        "title": "Relay: Copy Pairing Token",
+        "icon": "$(key)"
+      }
+    ],
+    "configuration": {
+      "title": "Relay",
+      "properties": {
+        "relay.controlPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to relayctl. Leave empty to use the bundled runtime, then a workspace build or PATH."
+        },
+        "relay.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start Relay automatically when a workspace opens, when the Relay binary is available."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node ../../scripts/build-vscode.ts",
+    "watch": "tsc -watch -p .",
+    "package": "npm --prefix ../.. run package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.96.0",
+    "@types/ws": "^8.18.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}

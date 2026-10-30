@@ -1,0 +1,82 @@
+{
+  "manifest_version": 3,
+  "name": "Relay",
+  "version": "1.0.0",
+  "description": "The browser companion for Relay: coding conversations bound to a registered local editor workspace.",
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://chat.deepseek.com/*",
+    "https://deepseek.com/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://www.kimi.ai/*",
+    "https://kimi.ai/*",
+    "https://chat.z.ai/*",
+    "https://chat.qwen.ai/*",
+    "https://arena.ai/*",
+    "https://www.meta.ai/*",
+    "https://meta.ai/*",
+    "https://ptero.pro/*",
+    "https://grok.com/*",
+    "http://127.0.0.1/*",
+    "ws://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "build/transport.js"
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "action": {
+    "default_popup": "control-popup.html",
+    "default_title": "Relay \u2014 local AI workspace control",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": [
+        "build/document.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://chat.deepseek.com/*",
+        "https://deepseek.com/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*",
+        "https://www.kimi.ai/*",
+        "https://kimi.ai/*",
+        "https://chat.z.ai/*",
+        "https://chat.qwen.ai/*",
+        "https://arena.ai/*",
+        "https://www.meta.ai/*",
+        "https://meta.ai/*",
+        "https://ptero.pro/*",
+        "https://grok.com/*"
+      ],
+      "js": [
+        "build/conversation.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

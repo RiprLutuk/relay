@@ -1,0 +1,16 @@
+{
+  "name": "relay-browser",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node ../../scripts/build-browser.ts",
+    "check": "tsc --noEmit",
+    "test": "node ../../scripts/test-browser.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.7",
+    "@types/node": "26.6.6",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}

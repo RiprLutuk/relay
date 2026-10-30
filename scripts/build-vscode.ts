@@ -1,0 +1,12 @@
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const extension = fileURLToPath(new URL("../apps/vscode-extension", import.meta.url));
+rmSync(resolve(extension, "out"), { recursive: true, force: true });
+const compiler = require.resolve("typescript/bin/tsc", { paths: [extension] });
+const result = spawnSync(process.execPath, [compiler, "-p", extension], { stdio: "inherit" });
+if (result.error) throw result.error;
+process.exit(result.status ?? 1);

@@ -1,0 +1,17 @@
+{
+  "name": "relay-workspace-control",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/setup.ts",
+    "package": "node scripts/package-release.ts",
+    "check:browser": "npm --prefix apps/extension run check",
+    "check:tooling": "node apps/extension/node_modules/typescript/bin/tsc -p scripts/tsconfig.json",
+    "build:browser": "npm --prefix apps/extension run build",
+    "build:vscode": "npm --prefix apps/vscode-extension run compile",
+    "test:vscode": "npm run build:vscode && node apps/vscode-extension/test/control-center.cjs",
+    "test:browser": "npm --prefix apps/extension test",
+    "test": "npm run check:browser && npm run check:tooling && npm run build:browser && npm run test:browser && npm run test:vscode && cargo test"
+  },
+  "version": "1.0.0"
+}

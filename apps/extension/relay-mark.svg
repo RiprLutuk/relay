@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Relay">
+  <rect width="128" height="128" rx="32" fill="#111827"/>
+  <rect x="1" y="1" width="126" height="126" rx="31" fill="none" stroke="#ffffff" stroke-opacity=".10" stroke-width="2"/>
+  <path d="M40 91V37h25c15 0 24 8 24 21 0 10-5 17-15 20l18 13" fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round" stroke-width="11"/>
+  <path d="M55 63h17" fill="none" stroke="#6685ff" stroke-linecap="round" stroke-width="11"/>
+</svg>

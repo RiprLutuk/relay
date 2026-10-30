@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Relay</title>
+<style>
+:root{color-scheme:dark;--surface:#171a21;--text:#e4e7ee;--muted:#9ba3b3;--line:#ffffff14;font:13px/1.5 system-ui}
+*{box-sizing:border-box}body{width:340px;margin:0;padding:18px;background:var(--surface);color:var(--text)}header{display:flex;align-items:center;gap:9px;margin-bottom:18px}header img{width:28px;height:28px}header b{font-size:16px;font-weight:600}#connection{margin-left:auto;font-size:12px;color:var(--muted)}#connection[data-online=true]{color:#94c9b5}label{display:block;color:var(--muted);font-size:12px;margin:12px 0 5px}select,input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px;background:#ffffff05;color:var(--text);font:inherit}option{background:var(--surface)}select:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid #8aa3e3;outline-offset:2px}button{border:1px solid var(--line);border-radius:8px;padding:9px 13px;font:inherit;font-weight:550;background:#ffffff08;color:var(--text);cursor:pointer}button:disabled{opacity:.4;cursor:default}#begin{width:100%;background:#647dab;color:white;margin-top:14px}#stop{width:100%;margin-top:14px}#notice{font-size:12px;color:var(--muted);margin:12px 0 0;overflow-wrap:anywhere}#approval{display:flex;align-items:start;gap:8px}#approval input{width:auto;margin-top:4px}#pairing{border-top:1px solid var(--line);margin-top:14px;padding-top:6px}#pair{margin-top:8px;width:100%}ul{list-style:none;padding:0;margin:14px 0 0}li{display:flex;gap:8px;padding:5px 0;font-size:12px;overflow:hidden}li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}time{margin-left:auto;opacity:.5;white-space:nowrap}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><img src="relay-mark.svg" alt=""><b>Relay</b><span id="connection">Connecting…</span></header>
+<label for="workspace">Project</label><select id="workspace"><option value="">Waiting for editor…</option></select>
+<label for="access">Access for this conversation</label><select id="access"><option value="workspace">Workspace</option><option value="full">Full access</option></select>
+<label id="approval" hidden><input id="approve" type="checkbox"><span>Allow files outside the project and unrestricted terminal commands for this session.</span></label>
+<button id="begin" disabled>Start session</button><button id="stop" hidden>Stop session</button>
+<p id="notice" role="status" aria-live="polite"></p><ul id="activity" aria-label="Recent activity"></ul>
+<section id="pairing" hidden><label for="token">Pairing token from your editor</label><input id="token" type="password" autocomplete="off" spellcheck="false"><button id="pair">Pair editor</button></section>
+<script src="build/controls.js"></script>
+</body>
+</html>
