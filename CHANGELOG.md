@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.1 — 2026-11-14
+## 1.0.1 — 2026-11-15
 
 - Isolates workspace sessions by browser tab so matching conversation URLs from different accounts cannot overwrite one another.
 - Keeps ChatGPT sessions active while a new chat moves through its temporary route to its permanent conversation URL.
