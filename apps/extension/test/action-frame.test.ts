@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { actionReceipt, readActionFrame } from "../src/domain/action-frame";
+import { actionReceipt, readActionFrame, sessionContext } from "../src/domain/action-frame";
 
 assert.deepEqual(readActionFrame('{"status":"ok"}'), { kind: "answer" });
 assert.deepEqual(readActionFrame('Example: <relay-action>{"tool":"workspace.list"}</relay-action>'), { kind: "answer" });
@@ -23,4 +23,8 @@ const receipt = actionReceipt("workspace.readText", { ok: true, text: "done", ac
 assert.match(receipt, /Action ID: action-1/);
 assert.match(receipt, /Duration: 42 ms/);
 assert.match(receipt, /Status: completed/);
+assert.match(receipt, /delivered this receipt automatically/);
+const context = sessionContext([], "project", "autonomous");
+assert.match(context, /automatically submits every action receipt/);
+assert.match(context, /Never ask the user to send another message through Relay/);
 console.log("PASS explicit Relay action frames; ordinary prose/JSON never executes");
