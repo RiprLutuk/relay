@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 — 2026-11-15
+
+- Keeps the agent loop moving after an action receipt instead of asking the user to forward another message through Relay.
+- Makes receipt delivery explicitly automatic and tells the AI to continue with the next required action or finish the task.
+- Prevents completed operations from being repeated while continuing a run.
+
 ## 1.0.1 — 2026-11-15
 
 - Isolates workspace sessions by browser tab so matching conversation URLs from different accounts cannot overwrite one another.

@@ -44,9 +44,9 @@ You do not need to clone this repo, build anything or run `relayctl start`.
 
 | OS | Download |
 | --- | --- |
-| Windows | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-win32-x64.vsix) |
-| Linux | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-linux-x64.vsix) · [ARM64](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-linux-arm64.vsix) |
-| macOS | [Intel](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-darwin-x64.vsix) · [Apple Silicon](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-darwin-arm64.vsix) |
+| Windows | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.2/relay-workspace-1.0.2-win32-x64.vsix) |
+| Linux | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.2/relay-workspace-1.0.2-linux-x64.vsix) · [ARM64](https://github.com/RiprLutuk/relay/releases/download/v1.0.2/relay-workspace-1.0.2-linux-arm64.vsix) |
+| macOS | [Intel](https://github.com/RiprLutuk/relay/releases/download/v1.0.2/relay-workspace-1.0.2-darwin-x64.vsix) · [Apple Silicon](https://github.com/RiprLutuk/relay/releases/download/v1.0.2/relay-workspace-1.0.2-darwin-arm64.vsix) |
 
 > Windows and Linux packages are cross-built. Direct editor integration tests were run on macOS. See [verification](docs/verification.md).
 
@@ -193,7 +193,7 @@ cargo clippy --all-targets -- -D warnings
 npm run package -- --all
 (cd target/packages && shasum -a 256 -c SHA256SUMS.txt)
 git push origin main
-gh release create v1.0.1 target/packages/relay-workspace-1.0.1-*.vsix target/packages/SHA256SUMS.txt --target main --title "Relay 1.0.1" --generate-notes
+gh release create v1.0.2 target/packages/relay-workspace-1.0.2-*.vsix target/packages/SHA256SUMS.txt --target main --title "Relay 1.0.2" --generate-notes
 ```
 
 After publishing, verify all five VSIX files and `SHA256SUMS.txt` on the release page, then update the Quick start download links. Users only download the VSIX, install it, load the prepared browser companion once, pair once and start a session—no repository clone or manual `relayctl` command is required.

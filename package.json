@@ -13,5 +13,5 @@
     "test:browser": "npm --prefix apps/extension test",
     "test": "npm run check:browser && npm run check:tooling && npm run build:browser && npm run test:browser && npm run test:vscode && cargo test"
   },
-  "version": "1.0.1"
+  "version": "1.0.2"
 }

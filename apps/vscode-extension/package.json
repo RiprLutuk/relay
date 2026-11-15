@@ -2,7 +2,7 @@
   "name": "relay-workspace",
   "displayName": "Relay Workspace",
   "description": "Native VS Code companion for the Relay local AI workspace control plane.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "relay-local",
   "repository": {
     "type": "git",
