@@ -163,6 +163,22 @@ npm run package
 
 `npm run package` creates a VSIX for your build machine's platform in `target/packages/`. Use `npm run package -- --target linux-x64` for one target, or `npm run package -- --all` for all five. Packaging validates binary architecture and writes `SHA256SUMS.txt`.
 
+### Publish a release
+
+Releases are GitHub assets, not a server deployment. Update the version in the root, browser, editor and Cargo manifests; add the changelog entry; then run:
+
+```sh
+npm test
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+npm run package -- --all
+(cd target/packages && shasum -a 256 -c SHA256SUMS.txt)
+git push origin main
+gh release create v1.0.1 target/packages/relay-workspace-1.0.1-*.vsix target/packages/SHA256SUMS.txt --target main --title "Relay 1.0.1" --generate-notes
+```
+
+After publishing, verify all five VSIX files and `SHA256SUMS.txt` on the release page, then update the Quick start download links. Users only download the VSIX, install it, load the prepared browser companion once, pair once and start a session—no repository clone or manual `relayctl` command is required.
+
 Install the matching Rust targets first. Linux builds use [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) and Zig with static musl binaries. Windows cross-builds use MinGW-w64, and native Windows builds use MSVC. macOS builds require the Apple SDK. These are maintainer tools; users only install the VSIX. Tests that launch a real browser are documented in [verification](docs/verification.md).
 
 ```text
