@@ -1,7 +1,7 @@
 {
   "name": "relay-browser",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.5",
   "scripts": {
     "build": "node ../../scripts/build-browser.ts",
     "check": "tsc --noEmit",

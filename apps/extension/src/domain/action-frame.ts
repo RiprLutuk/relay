@@ -8,7 +8,9 @@ export function requestsManualRelayContinuation(reply: string): boolean {
   const relayActivation = /\b(?:aktifkan|nyalakan|sambungkan|hubungkan|buka|activate|enable|reconnect|connect|open)\b.{0,64}\brelay\b/i;
   const userMessage = /\b(?:kirim|ketik|tulis|ucapkan|send|type|write|say)\b.{0,120}\b(?:lanjut|lanjutkan|continue|resume|message|pesan|deploy)\b/i;
   const relayMessage = /\brelay\b.{0,80}\b(?:kirim|send|message|pesan|lanjut|continue|resume)\b/i;
-  return relayActivation.test(text) || userMessage.test(text) || relayMessage.test(text);
+  const missingConnection = /\b(?:perlu|butuh|membutuhkan|memerlukan|need|needs|require|requires|missing|belum|tidak|not|without|unavailable)\b.{0,160}\brelay\b.{0,100}\b(?:aktif|active|connected|terhubung|available|tersedia|context|konteks|turn|giliran)\b/i;
+  const unavailableRelay = /\brelay\b.{0,120}\b(?:belum|tidak|not|isn't|is not|unavailable|disconnected|terputus)\b.{0,80}\b(?:aktif|active|connected|terhubung|available|tersedia|context|konteks)\b/i;
+  return relayActivation.test(text) || userMessage.test(text) || relayMessage.test(text) || missingConnection.test(text) || unavailableRelay.test(text);
 }
 
 export function automaticContinuation(): string {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 — 2026-11-15
+
+- Detects passive claims that Relay is unavailable, disconnected or missing context while its session is active.
+- Corrects Indonesian and English connection handoffs automatically without interrupting the task.
+- Keeps legitimate final answers that merely mention Relay from triggering continuation.
+
 ## 1.0.4 — 2026-11-15
 
 - Executes a valid action frame when a provider Markdown-escapes its markers as `\\<relay-action>`.
