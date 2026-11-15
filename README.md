@@ -22,6 +22,12 @@ The AI can read code, edit files and run checks, and you can see every action an
 
 **Built with:** a **Rust** runtime (sessions, authorization, process execution), a **TypeScript** browser companion (Chrome, Brave, Edge) and a **TypeScript** editor companion (VS Code, Cursor), all shipped in one VSIX.
 
+<p align="center">
+  <img src="docs/assets/relay-popup.png" alt="Relay popup showing a project-bound Supervised session and recent agent activity" width="376">
+</p>
+
+<p align="center"><strong>One conversation. One project. Every action visible.</strong></p>
+
 ## How it works
 
 1. **Install** one VSIX in your editor. It includes everything: the editor extension, the Rust runtime and the browser companion.
@@ -137,10 +143,33 @@ Stop Relay, delete the token file at `~/.relay/bridge-token` (or under `RELAY_ST
 
 ```mermaid
 flowchart LR
-    Chat[AI conversation] <--> Browser[TypeScript browser companion]
-    Browser <--> Runtime[Rust session and execution runtime]
-    Editor[TypeScript editor companion] --> Runtime
-    Runtime --> Project[Bound project and processes]
+    User([Developer]) --> Chat[Web AI conversation]
+
+    subgraph Browser[Browser companion]
+        Observe[Observe response]
+        Action[Validate one action]
+        Receipt[Render receipt]
+    end
+
+    subgraph Local[Local Relay control plane]
+        Session[Conversation-bound session]
+        Policy{Access policy}
+        Journal[Idempotent action journal]
+        MCP[Workspace MCP tools]
+    end
+
+    subgraph Editor[VS Code or Cursor]
+        Roots[Registered workspace roots]
+        Activity[Health and activity]
+    end
+
+    Chat --> Observe --> Action --> Session
+    Roots --> Session
+    Session --> Policy
+    Policy -->|Observe / Supervised / Autonomous| Journal --> MCP
+    MCP --> Project[(Selected project)]
+    MCP --> Receipt --> Chat
+    Session --> Activity
 ```
 
 The browser and editor companions are separate because they run in different hosts (browser DOM and Chrome APIs versus Node and VS Code APIs). Workspace routing, authorization and execution live in the Rust runtime. Capabilities are grouped by responsibility, for example `workspace.read`, `workspace.replace`, `project.test` and `process.run`.
