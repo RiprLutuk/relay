@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4 — 2026-11-15
+
+- Executes a valid action frame when a provider Markdown-escapes its markers as `\\<relay-action>`.
+- Accepts one standalone action frame with progress text before or after it.
+- Keeps inline examples inert so explanatory prose cannot accidentally execute a tool.
+
 ## 1.0.3 — 2026-11-15
 
 - Detects when an AI incorrectly asks the user to reconnect Relay or send a manual continuation message during an active run.

@@ -12,6 +12,14 @@ assert.deepEqual(
   readActionFrame('Saya akan cek isi index.html terlebih dahulu.\n\n<relay-action>{"tool":"workspace.readText","input":{"path":"index.html"}}</relay-action>'),
   { kind: "action", action: { tool: "workspace.readText", input: { path: "index.html" } } },
 );
+assert.deepEqual(
+  readActionFrame('Saya lanjutkan deployment sekarang.\n\n\\<relay-action>{"tool":"process.run","input":{"command":"npm","args":["run","build"]}}\\</relay-action>\n\nSaya akan memverifikasi hasilnya.'),
+  { kind: "action", action: { tool: "process.run", input: { command: "npm", args: ["run", "build"] } } },
+);
+assert.deepEqual(
+  readActionFrame('Example: <relay-action>{"tool":"workspace.list","input":{}}</relay-action>'),
+  { kind: "answer" },
+);
 for (const value of [
   '<relay-action>{"tool":"workspace.list"}',
   '<relay-action>{"tool":"workspace.list","input":[]}</relay-action>',

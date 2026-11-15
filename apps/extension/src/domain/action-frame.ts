@@ -17,11 +17,14 @@ export function automaticContinuation(): string {
 
 export function readActionFrame(reply: string): DecodedAction {
   const source = reply.trim();
-  const fenced = /^```(?:relay|json)?\s*\n([\s\S]*?)\n```\s*$/.exec(source);
-  const embedded = [...reply.matchAll(/```relay[^\S\r\n]*\r?\n([\s\S]*?)\r?\n```/gi)];
-  const markers = source.match(/<relay-action>/g)?.length || 0;
-  const trailing = markers === 1 ? /(?:^|\r?\n[\t ]*\r?\n)(<relay-action>[\s\S]*?<\/relay-action>)\s*$/.exec(source) : undefined;
-  const text = (fenced?.[1] || (embedded.length === 1 ? embedded[0]?.[1] : undefined) || trailing?.[1] || source).trim();
+  const normalized = source.replace(/\\(<\/?relay-action>)/gi, "$1");
+  const fenced = /^```(?:relay|json)?\s*\n([\s\S]*?)\n```\s*$/.exec(normalized);
+  const embedded = [...normalized.matchAll(/```relay[^\S\r\n]*\r?\n([\s\S]*?)\r?\n```/gi)];
+  const markers = normalized.match(/<relay-action>/gi)?.length || 0;
+  const standalone = markers === 1
+    ? /(?:^|\r?\n)[\t ]*(<relay-action>[\s\S]*?<\/relay-action>)[\t ]*(?=\r?\n|$)/i.exec(normalized)
+    : undefined;
+  const text = (fenced?.[1] || (embedded.length === 1 ? embedded[0]?.[1] : undefined) || standalone?.[1] || normalized).trim();
   if (!text.startsWith("<relay-action>")) return { kind: "answer" };
   if (text.length > 262144) return { kind: "invalid", error: "Action exceeds the message limit." };
   const match = /^<relay-action>\s*([\s\S]*?)\s*<\/relay-action>$/.exec(text);
