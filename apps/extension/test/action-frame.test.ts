@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { actionReceipt, readActionFrame, sessionContext } from "../src/domain/action-frame";
+import { actionReceipt, automaticContinuation, readActionFrame, requestsManualRelayContinuation, sessionContext } from "../src/domain/action-frame";
 
 assert.deepEqual(readActionFrame('{"status":"ok"}'), { kind: "answer" });
 assert.deepEqual(readActionFrame('Example: <relay-action>{"tool":"workspace.list"}</relay-action>'), { kind: "answer" });
@@ -27,4 +27,8 @@ assert.match(receipt, /delivered this receipt automatically/);
 const context = sessionContext([], "project", "autonomous");
 assert.match(context, /automatically submits every action receipt/);
 assert.match(context, /Never ask the user to send another message through Relay/);
+assert.equal(requestsManualRelayContinuation('Aktifkan kembali Relay dari VS Code dan kirim "lanjut deploy".'), true);
+assert.equal(requestsManualRelayContinuation("Reconnect Relay, then send the next message to continue."), true);
+assert.equal(requestsManualRelayContinuation("Relay completed the deployment successfully."), false);
+assert.match(automaticContinuation(), /Continue the existing task now/);
 console.log("PASS explicit Relay action frames; ordinary prose/JSON never executes");

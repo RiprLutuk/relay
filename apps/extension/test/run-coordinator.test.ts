@@ -28,9 +28,12 @@ async function verify() {
   assert.equal(calls, 1, "Concurrent observations must execute one action");
   assert.ok(sent[1]?.includes("Outcome: completed"));
   await run.observe(); assert.equal(calls, 1);
+  turn = { ...turn, id: "handoff", text: 'Aktifkan kembali Relay dan kirim "lanjut deploy".' };
+  await run.observe(); clock += 100; await run.observe();
+  assert.ok(sent[2]?.startsWith("<relay-continuation>"), "Manual Relay handoffs must be continued automatically");
   turn = { ...turn, id: "ordinary", text: '{"status":"ok"}' };
   await run.observe(); clock += 100; await run.observe();
-  assert.equal(sent.length, 2, "Ordinary JSON answers must not generate error feedback");
+  assert.equal(sent.length, 3, "Ordinary JSON answers must not generate error feedback");
   turn = { ...turn, id: "hidden", text: '<relay-action>{"tool":"workspace.list"}</relay-action>' };
   await run.observe(false); assert.equal(run.snapshot().phase, "paused");
   run.stop(); await run.observe(); assert.equal(calls, 1);

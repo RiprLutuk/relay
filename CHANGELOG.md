@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 — 2026-11-15
+
+- Detects when an AI incorrectly asks the user to reconnect Relay or send a manual continuation message during an active run.
+- Returns an automatic continuation turn so the AI resumes the existing task without user intervention.
+- Limits corrective continuations and fails visibly instead of creating an infinite model loop.
+
 ## 1.0.2 — 2026-11-15
 
 - Keeps the agent loop moving after an action receipt instead of asking the user to forward another message through Relay.

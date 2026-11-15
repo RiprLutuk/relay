@@ -1,4 +1,4 @@
-import { actionReceipt, readActionFrame, sessionContext } from "./action-frame";
+import { actionReceipt, automaticContinuation, readActionFrame, requestsManualRelayContinuation, sessionContext } from "./action-frame";
 import type { ActionRequest, ActionResult, AssistantTurn, Capability, ChatSurface, RunSnapshot } from "./contracts";
 
 export interface RunPorts {
@@ -20,6 +20,7 @@ export class ConversationRun {
   private awaitingReply = false;
   private revision = 0;
   private capabilities = new Set<string>();
+  private rejectedHandoffs = 0;
 
   constructor(private readonly surface: ChatSurface, private readonly ports: RunPorts, private readonly settleMs = 2000) {
     this.current = { conversation: surface.conversation(), phase: "idle", active: false };
@@ -39,6 +40,7 @@ export class ConversationRun {
     const revision = ++this.revision;
     const signal = this.abort.signal;
     this.failures = 0;
+    this.rejectedHandoffs = 0;
     this.observation = { value: "", since: 0 };
     this.current = { conversation: this.surface.conversation(), phase: "preparing", active: true, lastTurn: this.surface.reply()?.id };
     this.awaitingReply = true;
@@ -106,11 +108,20 @@ export class ConversationRun {
     this.awaitingReply = false;
     try {
       const decoded = readActionFrame(turn.text);
-      if (decoded.kind === "answer") { this.transition("waiting"); return; }
+      if (decoded.kind === "answer") {
+        if (!requestsManualRelayContinuation(turn.text)) { this.transition("waiting"); return; }
+        if (++this.rejectedHandoffs > 2) throw new Error("The AI repeatedly asked for manual Relay continuation while the session was active.");
+        this.transition("returning");
+        await this.surface.submit(automaticContinuation(), signal);
+        this.awaitingReply = true;
+        if (!signal.aborted && revision === this.revision) this.transition("waiting");
+        return;
+      }
       let result: ActionResult;
       if (decoded.kind === "invalid") {
         result = { ok: false, error: decoded.error };
       } else {
+        this.rejectedHandoffs = 0;
         this.transition("executing");
         this.ports.present(turn, decoded.action);
         result = this.capabilities.has(decoded.action.tool)

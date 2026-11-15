@@ -68,6 +68,7 @@ export class ActivityView {
       const text = (item.innerText || item.textContent || "").trim();
       if (text.startsWith("<relay-context>") && text.endsWith("</relay-context>")) this.card(item, "Workspace session", "Ready", "Relay connected this conversation to your selected project.");
       else if (text.startsWith("<relay-receipt>") && text.endsWith("</relay-receipt>")) this.card(item, "Action result", "", readableResult(text.slice(15, -16).trim()));
+      else if (text.startsWith("<relay-continuation>") && text.endsWith("</relay-continuation>")) this.card(item, "Agent continuation", "Automatic", "Relay kept the active task moving without user intervention.");
       else this.release(item);
     }
   }

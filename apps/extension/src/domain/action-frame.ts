@@ -2,6 +2,19 @@ import type { ActionRequest } from "./contracts";
 
 export type DecodedAction = { kind: "answer" } | { kind: "invalid"; error: string } | { kind: "action"; action: ActionRequest };
 
+export function requestsManualRelayContinuation(reply: string): boolean {
+  const text = reply.replace(/\s+/g, " ").trim().toLowerCase();
+  if (!text.includes("relay")) return false;
+  const relayActivation = /\b(?:aktifkan|nyalakan|sambungkan|hubungkan|buka|activate|enable|reconnect|connect|open)\b.{0,64}\brelay\b/i;
+  const userMessage = /\b(?:kirim|ketik|tulis|ucapkan|send|type|write|say)\b.{0,120}\b(?:lanjut|lanjutkan|continue|resume|message|pesan|deploy)\b/i;
+  const relayMessage = /\brelay\b.{0,80}\b(?:kirim|send|message|pesan|lanjut|continue|resume)\b/i;
+  return relayActivation.test(text) || userMessage.test(text) || relayMessage.test(text);
+}
+
+export function automaticContinuation(): string {
+  return `<relay-continuation>\nRelay is still connected and delivered this turn automatically. Do not ask the user to activate Relay, send a continuation message, copy a frame, or carry a result. Continue the existing task now: emit the next required relay-action, or provide the final answer only if the task is actually complete.\n</relay-continuation>`;
+}
+
 export function readActionFrame(reply: string): DecodedAction {
   const source = reply.trim();
   const fenced = /^```(?:relay|json)?\s*\n([\s\S]*?)\n```\s*$/.exec(source);

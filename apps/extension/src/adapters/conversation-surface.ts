@@ -111,7 +111,7 @@ export class WebConversationSurface implements ChatSurface {
     const editor = visibleElement<HTMLInputElement | HTMLTextAreaElement | HTMLDivElement>(this.profile.input);
     if (!editor) throw new Error(`${this.name}: message composer unavailable. Open an editable chat.`);
     const existing = editorText(editor);
-    const internal = text.startsWith("<relay-context>") || text.startsWith("<relay-receipt>");
+    const internal = text.startsWith("<relay-context>") || text.startsWith("<relay-receipt>") || text.startsWith("<relay-continuation>");
     if (existing.trim() && !internal) throw new Error("Your composer contains an unsent draft. Send or clear it before continuing Relay.");
     const draft = internal ? existing : "";
     replaceEditorText(editor, text);
