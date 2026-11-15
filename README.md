@@ -142,37 +142,27 @@ Stop Relay, delete the token file at `~/.relay/bridge-token` (or under `RELAY_ST
 ## Architecture
 
 ```mermaid
-flowchart LR
-    User([Developer]) --> Chat[Web AI conversation]
-
-    subgraph Browser[Browser companion]
-        Observe[Observe response]
-        Action[Validate one action]
-        Receipt[Render receipt]
+flowchart TB
+    subgraph Web[Browser]
+        AI[ChatGPT · Claude · Gemini · other supported AI]
+        Companion[Relay browser companion]
+        AI <--> Companion
     end
 
-    subgraph Local[Local Relay control plane]
-        Session[Conversation-bound session]
-        Policy{Access policy}
-        Journal[Idempotent action journal]
-        MCP[Workspace MCP tools]
+    subgraph Device[Your machine]
+        Editor[VS Code or Cursor]
+        Control[Relay Rust control plane]
+        Tools[Workspace MCP · 25 tools]
+        Project[(Selected workspace)]
+
+        Editor -->|Register roots + heartbeat| Control
+        Control --> Tools --> Project
     end
 
-    subgraph Editor[VS Code or Cursor]
-        Roots[Registered workspace roots]
-        Activity[Health and activity]
-    end
-
-    Chat --> Observe --> Action --> Session
-    Roots --> Session
-    Session --> Policy
-    Policy -->|Observe / Supervised / Autonomous| Journal --> MCP
-    MCP --> Project[(Selected project)]
-    MCP --> Receipt --> Chat
-    Session --> Activity
+    Companion <-->|Authenticated loopback WebSocket| Control
 ```
 
-The browser and editor companions are separate because they run in different hosts (browser DOM and Chrome APIs versus Node and VS Code APIs). Workspace routing, authorization and execution live in the Rust runtime. Capabilities are grouped by responsibility, for example `workspace.read`, `workspace.replace`, `project.test` and `process.run`.
+The browser companion observes one AI conversation; the editor companion registers trusted workspace roots. The Rust control plane binds them into an immutable session, enforces access policy, executes MCP tools locally and returns a correlated receipt. Browser focus changes cannot redirect an active session.
 
 Technical contracts: [architecture](docs/architecture.md) · [protocol](docs/protocol.md) · [security](docs/security.md) · [agent workflow](docs/agent-workflow.md) · [development](docs/development.md) · [roadmap](docs/roadmap.md) · [audit](docs/architecture-audit.md)
 
