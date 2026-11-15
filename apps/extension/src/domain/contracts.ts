@@ -17,10 +17,10 @@ export interface WorkspaceBinding {
   sessionId: string;
   workspaceId: string;
   bridgeId: string;
-  access: "workspace" | "full";
+  access: "observe" | "supervised" | "autonomous";
 }
 
-export type RunPhase = "idle" | "preparing" | "waiting" | "executing" | "returning" | "paused" | "stopped" | "failed";
+export type RunPhase = "idle" | "preparing" | "waiting" | "waitingApproval" | "executing" | "returning" | "paused" | "stopped" | "failed";
 
 export interface ActivityEvent {
   at: number;
@@ -39,6 +39,10 @@ export interface ActionResult {
   text?: string;
   error?: string;
   kind?: string;
+  actionId?: string;
+  status?: "completed" | "failed" | "cancelled" | "timedOut";
+  durationMs?: number;
+  errorCode?: string;
 }
 
 export interface AssistantTurn {

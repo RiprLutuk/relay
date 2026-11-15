@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Relay",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "The browser companion for Relay: coding conversations bound to a registered local editor workspace.",
   "permissions": [
     "storage",

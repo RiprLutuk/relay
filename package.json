@@ -9,9 +9,9 @@
     "check:tooling": "node apps/extension/node_modules/typescript/bin/tsc -p scripts/tsconfig.json",
     "build:browser": "npm --prefix apps/extension run build",
     "build:vscode": "npm --prefix apps/vscode-extension run compile",
-    "test:vscode": "npm run build:vscode && node apps/vscode-extension/test/control-center.cjs",
+    "test:vscode": "npm run build:vscode && node apps/vscode-extension/test/control-center.cjs && node apps/vscode-extension/test/editor-session.cjs && node apps/vscode-extension/test/runtime-lifecycle.cjs",
     "test:browser": "npm --prefix apps/extension test",
     "test": "npm run check:browser && npm run check:tooling && npm run build:browser && npm run test:browser && npm run test:vscode && cargo test"
   },
-  "version": "1.0.0"
+  "version": "1.0.1"
 }

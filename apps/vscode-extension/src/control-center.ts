@@ -23,10 +23,11 @@ export function controlCenterHtml(): string {
   let previousActivity='';
   window.addEventListener('message',event=>{
     const state=event.data.state;if(!state)return;
-    document.getElementById('connection-label').textContent=state.online?(state.alive?'Connected':'MCP unavailable'):'Offline';
+    document.getElementById('connection-label').textContent=state.online?(state.alive?'Ready':'MCP unavailable'):(state.phase==='reconnecting'?'Reconnecting':state.phase==='connecting'||state.phase==='handshaking'?'Connecting':'Offline');
     document.getElementById('connection-dot').className='dot '+(state.online&&state.alive?'ok':'error');
     document.getElementById('access').textContent=state.online?'EDITOR':'';
-    document.getElementById('meta').textContent=state.online?state.tools+' tools · '+state.servers.length+' server'+(state.servers.length===1?'':'s'):(state.error||'Open the workspace to start Relay');
+    const latency=Number.isFinite(state.latencyMs)?' · '+state.latencyMs+' ms':'';
+    document.getElementById('meta').textContent=state.online?state.tools+' tools · '+state.servers.length+' server'+(state.servers.length===1?'':'s')+latency:(state.error||'Open the workspace to start Relay');
     document.getElementById('start-bridge').hidden=state.online;
     const entries=(state.activity||[]).slice(0,6),signature=JSON.stringify(entries);
     if(signature===previousActivity)return;previousActivity=signature;

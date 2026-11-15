@@ -8,11 +8,13 @@ const require = createRequire(import.meta.url);
 const root = fileURLToPath(new URL("../apps/extension", import.meta.url));
 const { buildSync } = require(require.resolve("esbuild", { paths: [root] }));
 const directory = mkdtempSync(resolve(tmpdir(), "relay-browser-tests-"));
+let failed = false;
 try {
   for (const file of readdirSync(resolve(root, "test")).filter(file => file.endsWith(".test.ts"))) {
     const output = resolve(directory, file.replace(/\.ts$/, ".cjs"));
     buildSync({ entryPoints: [resolve(root, "test", file)], outfile: output, platform: "node", format: "cjs", bundle: true, legalComments: "none" });
     const result = spawnSync(process.execPath, [output], { stdio: "inherit" });
-    if (result.status !== 0) process.exitCode = result.status || 1;
+    if (result.status !== 0) failed = true;
   }
 } finally { rmSync(directory, { recursive: true, force: true }); }
+if (failed) process.exit(1);

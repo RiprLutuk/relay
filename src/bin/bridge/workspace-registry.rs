@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use super::*;
-use std::{path::Path, sync::Mutex as StdMutex};
+use std::{collections::HashSet, path::Path, sync::Mutex as StdMutex};
 use tokio::sync::watch;
 
 const LEASE_SECONDS: u64 = 30;
@@ -129,6 +129,7 @@ pub(super) struct Session {
     pub servers: HashMap<String, SharedServer>,
     pub journal: super::executionJournal::ExecutionJournal,
     access: Mutex<String>,
+    approvals: Mutex<HashSet<String>>,
     cancelled: watch::Sender<bool>,
 }
 impl Session {
@@ -145,9 +146,7 @@ impl Session {
     }
     pub async fn setAccess(&self, mode: &str) -> Result<()> {
         self.valid()?;
-        if !matches!(mode, "workspace" | "full") {
-            bail!("Invalid access mode");
-        }
+        let mode = super::permissionPolicy::AccessMode::parse(mode)?.asStr();
         let mut current = self.access.lock().await;
         if *current != mode {
             for server in self.servers.values() {
@@ -159,6 +158,26 @@ impl Session {
             *current = mode.to_owned();
         }
         self.valid()
+    }
+    pub async fn permission(&self, tool: &str, action: &str) -> super::permissionPolicy::Decision {
+        let decision = super::permissionPolicy::AccessMode::parse(&self.access.lock().await)
+            .unwrap_or(super::permissionPolicy::AccessMode::Observe)
+            .decide(tool);
+        if decision == super::permissionPolicy::Decision::ApprovalRequired
+            && self.approvals.lock().await.remove(action)
+        {
+            super::permissionPolicy::Decision::Allow
+        } else {
+            decision
+        }
+    }
+    pub async fn approve(&self, action: &str) -> Result<()> {
+        self.valid()?;
+        if action.len() != 64 || !action.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            bail!("Invalid action identity");
+        }
+        self.approvals.lock().await.insert(action.to_owned());
+        Ok(())
     }
     pub async fn call(&self, name: &str, args: Value, seconds: u64) -> Result<Value> {
         self.valid()?;
@@ -389,7 +408,8 @@ impl Router {
             workspace,
             servers,
             journal: super::executionJournal::ExecutionJournal::default(),
-            access: Mutex::new("workspace".into()),
+            access: Mutex::new("supervised".into()),
+            approvals: Mutex::new(HashSet::new()),
             cancelled: watch::channel(false).0,
         });
         session.valid()?;

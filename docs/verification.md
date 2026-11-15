@@ -1,4 +1,4 @@
-# Verification — 30 October 2026
+# Verification — 15 November 2026
 
 ## Automated checks
 
@@ -27,6 +27,8 @@ Build native binaries and the editor extension first (`cargo build --bins`, `npm
 This test loads the actual unpacked extension in a fresh browser profile and connects it to real `EditorSession` implementations and the Rust/MCP runtime on an isolated port. Three roots are registered. Two conversations create and read different files in their selected roots, return receipts to their chat fixtures and finish independently. It also verifies virtualized CodeMirror text, readable history after reload, no historical replay, session recovery after stopping the service worker, fresh results after an external edit, independent stop and a 360px layout. After a stopped conversation starts again on another root, a delayed action carrying its old run identity must be rejected without writing to either root.
 
 Set `RELAY_TEST_LATE_ATTACH=1` to open the chat before its content script is registered: Start must attach the real agent without a page reload. Set `RELAY_TEST_STARTUP_FAILURE=1` to verify an unsent draft stays untouched and the startup error survives status polling. One conversation uses explicitly approved Full access; the other uses Workspace access.
+
+Set `RELAY_TEST_STICKY_COMPOSER=1` to verify that a newly rendered user turn confirms internal message delivery even when ChatGPT leaves the submitted text in its composer. Relay clears that stale internal text without replaying the message.
 
 The chat page supplies deterministic responses. This verifies transport and orchestration without claiming a live AI model ran the task. The screenshot is `/tmp/relay-browser-flow.png`.
 

@@ -16,7 +16,7 @@ The AI can read code, edit files and run checks, and you can see every action an
 [![Node.js](https://img.shields.io/badge/Node.js-22.18%2B-339933?logo=nodedotjs&logoColor=white)](package.json)
 [![VS Code | Cursor](https://img.shields.io/badge/VS%20Code%20%7C%20Cursor-007ACC?logo=visualstudiocode&logoColor=white)](#quick-start)
 
-[**Download**](https://github.com/RiprLutuk/relay/releases/latest) · [Quick start](#quick-start) · [Troubleshooting](#troubleshooting) · [Verification](docs/verification.md) · [Configuration](docs/configuration.md)
+[**Download**](https://github.com/RiprLutuk/relay/releases/latest) · [Quick start](#quick-start) · [Troubleshooting](docs/troubleshooting.md) · [Architecture](docs/architecture.md) · [Verification](docs/verification.md) · [Configuration](docs/configuration.md)
 
 </div>
 
@@ -87,10 +87,11 @@ Each conversation keeps its own project, even if you switch editor windows. Pair
 
 | Mode | What the AI can do |
 | --- | --- |
-| **Workspace** | Files and commands are confined to your selected project. |
-| **Full access** | Broader filesystem and process operations. Requires checking an approval box, and applies only to that conversation. |
+| **Observe** | Read-only inspection. Mutations and commands are denied. |
+| **Supervised** | Reads run directly; each change or command requires exact-action approval. |
+| **Autonomous** | Approved tools may act without per-action prompts inside the selected project. |
 
-Workspace mode is not an OS sandbox: project scripts and tools run as your user. Only open projects you trust. Details are in [SECURITY.md](SECURITY.md).
+Autonomous mode is not an OS sandbox: project scripts and tools run as your user. Only open projects you trust. Details are in [SECURITY.md](SECURITY.md).
 
 ## Why it is reliable
 
@@ -143,6 +144,8 @@ flowchart LR
 ```
 
 The browser and editor companions are separate because they run in different hosts (browser DOM and Chrome APIs versus Node and VS Code APIs). Workspace routing, authorization and execution live in the Rust runtime. Capabilities are grouped by responsibility, for example `workspace.read`, `workspace.replace`, `project.test` and `process.run`.
+
+Technical contracts: [architecture](docs/architecture.md) · [protocol](docs/protocol.md) · [security](docs/security.md) · [agent workflow](docs/agent-workflow.md) · [development](docs/development.md) · [roadmap](docs/roadmap.md) · [audit](docs/architecture-audit.md)
 
 ## Contributing
 

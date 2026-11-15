@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.1 — 2026-11-14
+
+- Isolates workspace sessions by browser tab so matching conversation URLs from different accounts cannot overwrite one another.
+- Keeps ChatGPT sessions active while a new chat moves through its temporary route to its permanent conversation URL.
+- Preserves active sessions across provider reloads and account-specific routes.
+- Executes one intended Relay action when a provider adds progress text or omits the optional fence.
+- Replaces an older running Relay daemon automatically after an extension upgrade.
+- Preserves an unsent chat draft while Relay starts or returns an action receipt.
+- Stops an obsolete content script quietly after the browser extension is reloaded.
+- Confirms internal message delivery from the rendered ChatGPT user turn when the composer does not clear immediately.
+- Adds explicit connection health, action timing, stable error codes and strict browser test failure propagation.
+- Adds Observe, Supervised and Autonomous access enforced by the Rust session boundary, with exact-action approval in the browser popup.
+- Adds dependency-aware `task.execute` batches with bounded parallel reads, serialized mutations and partial step receipts.
+- Expands project context with evidence-derived language, framework, package manager, test command and monorepo detection.
+
 ## 1.0.0 — 2026-10-30
 
 - One VSIX bundles the editor companion, Rust runtime and browser companion.

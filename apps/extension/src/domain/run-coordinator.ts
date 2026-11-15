@@ -7,7 +7,7 @@ export interface RunPorts {
   publish(state: RunSnapshot): void;
   present(turn: AssistantTurn, action: ActionRequest, result?: ActionResult): void;
   target(): string;
-  access?(): "workspace" | "full";
+  access?(): "observe" | "supervised" | "autonomous";
   now(): number;
 }
 
@@ -46,7 +46,7 @@ export class ConversationRun {
     try {
       const catalog = await this.ports.catalog();
       if (signal.aborted || revision !== this.revision) return;
-      if (!catalog.length) throw new Error("The selected workspace has no available capabilities.");
+      if (!catalog?.length) throw new Error("The selected workspace has no available capabilities.");
       this.capabilities = new Set(catalog.map(capability => capability.name));
       await this.surface.submit(sessionContext(catalog, this.ports.target(), this.ports.access?.()), signal);
       if (!signal.aborted && revision === this.revision) this.transition("waiting");
@@ -58,7 +58,7 @@ export class ConversationRun {
     const revision = ++this.revision;
     const catalog = await this.ports.catalog();
     if (revision !== this.revision) return;
-    this.capabilities = new Set(catalog.map(capability => capability.name));
+    this.capabilities = new Set((catalog || []).map(capability => capability.name));
     this.current = { ...saved, conversation: this.surface.conversation(), phase: "waiting" };
     this.awaitingReply = saved.pendingReply ?? (this.surface.busy() || ["preparing", "executing", "returning"].includes(saved.phase));
     this.transition("waiting");
@@ -120,6 +120,7 @@ export class ConversationRun {
         this.ports.present(turn, decoded.action, result);
       }
       if (signal.aborted || revision !== this.revision) return;
+      if (result.kind === "approvalRequired") { this.transition("waitingApproval"); return; }
       if (result.kind === "workspaceUnavailable" || result.kind === "disconnected") throw new Error(result.error || "Workspace connection lost.");
       this.failures = result.ok ? 0 : this.failures + 1;
       if (this.failures >= 3) throw new Error("Three actions failed in succession. Review the latest error before resuming.");
@@ -129,5 +130,17 @@ export class ConversationRun {
       if (!signal.aborted && revision === this.revision) this.transition("waiting");
     } catch (error) { if (revision === this.revision) this.fail(error); }
     finally { this.occupied = false; }
+  }
+
+  async completeApproval(turn: AssistantTurn, action: ActionRequest, result: ActionResult): Promise<void> {
+    if (!this.current.active || this.current.phase !== "waitingApproval" || this.abort.signal.aborted) return;
+    this.ports.present(turn, action, result);
+    if (result.kind === "workspaceUnavailable" || result.kind === "disconnected") { this.fail(result.error || "Workspace connection lost."); return; }
+    this.transition("returning");
+    try {
+      await this.surface.submit(actionReceipt(action.tool, result), this.abort.signal);
+      this.awaitingReply = true;
+      this.transition("waiting");
+    } catch (error) { this.fail(error); }
   }
 }

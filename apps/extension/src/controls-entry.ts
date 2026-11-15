@@ -33,8 +33,8 @@ async function refresh(): Promise<void> {
     project.disabled = !!run?.active || !!status.changing;
     const access = element<HTMLSelectElement>("access");
     access.disabled = !!run?.active || !!status.changing;
-    if (run?.active) access.value = String(status.access || "workspace");
-    element("approval").hidden = !!run?.active || access.value !== "full";
+    if (run?.active) access.value = String(status.access || "supervised");
+    element("approval").hidden = !!run?.active || access.value !== "autonomous";
     start.hidden = !!run?.active;
     stop.hidden = !run?.active;
     start.disabled = !status.connected || !project.value || !!status.changing;
@@ -44,6 +44,10 @@ async function refresh(): Promise<void> {
     state.dataset.online = String(!!status.connected);
     element("notice").textContent = problem || (!status.connected ? "Start Relay from your editor, then pair once." : workspaces.length ? "This conversation stays bound to the selected project." : "Waiting for an editor workspace to register.");
     const events = (status.events || []) as ActivityEvent[];
+    const pending = status.pending as { operation?: string; action?: { tool?: string; input?: Record<string, unknown> } } | undefined;
+    element("pending").hidden = !pending;
+    element("pending-detail").textContent = pending ? `${actionTitle(String(pending.action?.tool || "Action"))}\n${JSON.stringify(pending.action?.input || {}, null, 2)}` : "";
+    element("pending").dataset.actionId = pending?.operation || "";
     element("activity").replaceChildren(...events.slice(0, 5).map(event => {
       const row = document.createElement("li");
       const label = document.createElement("span"); label.textContent = actionTitle(event.title);
@@ -58,7 +62,7 @@ async function refresh(): Promise<void> {
 }
 
 project.addEventListener("change", () => { controlError = ""; start.disabled = !project.value; });
-element<HTMLSelectElement>("access").addEventListener("change", event => { controlError = ""; element("approval").hidden = (event.target as HTMLSelectElement).value !== "full"; });
+element<HTMLSelectElement>("access").addEventListener("change", event => { controlError = ""; element("approval").hidden = (event.target as HTMLSelectElement).value !== "autonomous"; });
 element("approve").addEventListener("change", () => { controlError = ""; void refresh(); });
 start.addEventListener("click", async () => {
   controlError = "";
@@ -70,6 +74,8 @@ start.addEventListener("click", async () => {
   } catch (error) { showError(error); start.disabled = false; }
 });
 stop.addEventListener("click", async () => { controlError = ""; try { await control("control.stop"); await refresh(); } catch (error) { showError(error); } });
+element("allow-action").addEventListener("click", async () => { try { await control("control.approve", { actionId: element("pending").dataset.actionId }); await refresh(); } catch (error) { showError(error); } });
+element("reject-action").addEventListener("click", async () => { try { await control("control.reject", { actionId: element("pending").dataset.actionId }); await refresh(); } catch (error) { showError(error); } });
 element("pair").addEventListener("click", async () => {
   controlError = "";
   const input = element<HTMLInputElement>("token");

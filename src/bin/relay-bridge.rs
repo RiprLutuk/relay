@@ -8,7 +8,7 @@ use std::{
     env, fs,
     path::PathBuf,
     sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -26,6 +26,21 @@ use tokio_tungstenite::{
 };
 
 const PROTOCOL: &str = "2024-11-05";
+fn executionErrorCode(message: &str, workspaceUnavailable: bool) -> &'static str {
+    if workspaceUnavailable {
+        "WORKSPACE_UNAVAILABLE"
+    } else if message.to_ascii_lowercase().contains("timed out") {
+        "ACTION_TIMEOUT"
+    } else if message.to_ascii_lowercase().contains("permission")
+        || message.to_ascii_lowercase().contains("not allowed")
+    {
+        "PERMISSION_DENIED"
+    } else if message.to_ascii_lowercase().contains("not found") {
+        "FILE_NOT_FOUND"
+    } else {
+        "PROCESS_FAILED"
+    }
+}
 fn stateDirectory() -> PathBuf {
     if let Some(path) = env::var_os("RELAY_STATE_DIR") {
         return PathBuf::from(path);
@@ -119,7 +134,15 @@ fn workspaceServerBinary() -> PathBuf {
         .unwrap_or_else(|| root().join("target/release/relay-workspace"))
 }
 fn log(message: impl AsRef<str>) {
-    eprintln!("{}", message.as_ref());
+    eprintln!(
+        "{}",
+        json!({
+            "timestamp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis(),
+            "level": "info",
+            "component": "bridge",
+            "message": message.as_ref().chars().take(1000).collect::<String>()
+        })
+    );
 }
 
 struct Process {
@@ -290,6 +313,8 @@ impl Server {
 type SharedServer = Arc<Mutex<Server>>;
 #[path = "bridge/execution-journal.rs"]
 mod executionJournal;
+#[path = "bridge/permission-policy.rs"]
+mod permissionPolicy;
 #[path = "bridge/workspace-registry.rs"]
 mod workspaceRegistry;
 use workspaceRegistry::Router;
@@ -359,7 +384,7 @@ impl Bridge {
         Ok(bridge)
     }
     async fn start(&self) {
-        let accessMode = "workspace";
+        let accessMode = "supervised";
         for server in self.servers.values() {
             let mut s = server.lock().await;
             if let Err(e) = s.start(accessMode).await {
@@ -473,6 +498,8 @@ impl Bridge {
                 v
             }
             Some("capability.invoke") => {
+                let started = Instant::now();
+                let actionId = r["operationId"].as_str().unwrap_or("").to_owned();
                 let name = match r["name"].as_str() {
                     Some(v) => v,
                     None => {
@@ -485,6 +512,15 @@ impl Bridge {
                         return json!({"type":"actionResult","id":id,"ok":false,"kind":"workspaceUnavailable","error":e.to_string()});
                     }
                 };
+                match session.permission(name, &actionId).await {
+                    permissionPolicy::Decision::Allow => {}
+                    permissionPolicy::Decision::ApprovalRequired => {
+                        return json!({"type":"actionResult","id":id,"ok":false,"actionId":actionId,"status":"approvalRequired","errorCode":"APPROVAL_REQUIRED","kind":"approvalRequired","error":"This action requires approval in Relay before it can run."});
+                    }
+                    permissionPolicy::Decision::Deny => {
+                        return json!({"type":"actionResult","id":id,"ok":false,"actionId":actionId,"status":"rejected","errorCode":"PERMISSION_DENIED","kind":"permissionDenied","error":"The selected access mode does not permit this action."});
+                    }
+                }
 
                 let secs = r["timeout"]
                     .as_f64()
@@ -528,24 +564,28 @@ impl Bridge {
                         if result["isError"] == true {
                             self.activity("error", format!("{name} failed"), text.clone(), &r)
                                 .await;
-                            json!({"type":"actionResult","id":id,"ok":false,"error":text})
+                            json!({"type":"actionResult","id":id,"ok":false,"actionId":actionId,"status":"failed","durationMs":started.elapsed().as_millis(),"errorCode":executionErrorCode(&text, false),"error":text})
                         } else {
                             self.activity("ok", format!("{name} finished"), "Tool completed", &r)
                                 .await;
-                            json!({"type":"actionResult","id":id,"ok":true,"text":text,"images":images})
+                            json!({"type":"actionResult","id":id,"ok":true,"actionId":actionId,"status":"completed","durationMs":started.elapsed().as_millis(),"text":text,"images":images})
                         }
                     }
                     Err(e) => {
-                        self.activity("error", format!("{name} failed"), e.to_string(), &r)
+                        let message = e.to_string();
+                        let unavailable = session.valid().is_err();
+                        self.activity("error", format!("{name} failed"), message.clone(), &r)
                             .await;
-                        json!({"type":"actionResult","id":id,"ok":false,"kind":if session.valid().is_err(){"workspaceUnavailable"}else{"actionError"},"error":e.to_string()})
+                        json!({"type":"actionResult","id":id,"ok":false,"actionId":actionId,"status":"failed","durationMs":started.elapsed().as_millis(),"errorCode":executionErrorCode(&message, unavailable),"kind":if unavailable{"workspaceUnavailable"}else{"actionError"},"error":message})
                     }
                 }
             }
             Some("session.authorize") => {
                 let result = async {
-                    if r["access"] == "full" && r["confirm"] != true {
-                        bail!("full access requires explicit confirmation");
+                    if matches!(r["access"].as_str(), Some("autonomous" | "full"))
+                        && r["confirm"] != true
+                    {
+                        bail!("autonomous access requires explicit confirmation");
                     }
                     let session = self.router.session(&r).await?;
                     session
@@ -565,6 +605,21 @@ impl Bridge {
                     Ok(v) => v,
                     Err(e) => {
                         json!({"type":"accessState","id":id,"ok":false,"error":e.to_string()})
+                    }
+                }
+            }
+            Some("session.approve") => {
+                let result = async {
+                    let session = self.router.session(&r).await?;
+                    session.approve(r["actionId"].as_str().unwrap_or("")).await
+                }
+                .await;
+                match result {
+                    Ok(()) => {
+                        json!({"type":"approvalState","id":id,"ok":true,"actionId":r["actionId"]})
+                    }
+                    Err(error) => {
+                        json!({"type":"approvalState","id":id,"ok":false,"error":error.to_string()})
                     }
                 }
             }

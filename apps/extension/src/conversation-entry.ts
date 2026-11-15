@@ -1,6 +1,8 @@
 import { WebConversationSurface } from "./adapters/conversation-surface";
 import { profileFor } from "./adapters/site-profiles";
 import { ConversationRun } from "./domain/run-coordinator";
+import { isProvisionalConversation } from "./domain/conversation-address";
+import { isExtensionContextInvalid } from "./domain/extension-lifetime";
 import type { ActionRequest, ActionResult, Capability, ChatSurface, RunSnapshot, WorkspaceTarget } from "./domain/contracts";
 import { ActivityView } from "./presentation/activity-view";
 
@@ -11,10 +13,22 @@ if (profile && !agentHost.relayConversationAttached) {
   const view = new ActivityView();
   const surface = new WebConversationSurface(profile);
   let target: WorkspaceTarget | undefined;
-  let access: "workspace" | "full" = "workspace";
+  let access: "observe" | "supervised" | "autonomous" = "supervised";
   let route = surface.conversation();
   let publishing = Promise.resolve();
+  let adoption: Promise<void> | undefined;
+  let ticker: ReturnType<typeof setInterval> | undefined;
+  let detached = false;
   let runId = "";
+  const detach = () => {
+    detached = true;
+    if (ticker) clearInterval(ticker);
+    agentHost.relayConversationAttached = false;
+  };
+  const report = (scope: string, error: unknown) => {
+    if (isExtensionContextInvalid(error)) { detach(); return; }
+    console.error(scope, error);
+  };
   const api = async (method: string, fields: Record<string, unknown> = {}, identity = runId) => {
     const reply = await chrome.runtime.sendMessage({ method, runId: identity, ...fields }) as Record<string, unknown>;
     if (!reply?.ok) throw Object.assign(new Error(String(reply?.error || "Relay did not respond.")), { kind: reply?.kind });
@@ -27,17 +41,13 @@ if (profile && !agentHost.relayConversationAttached) {
       const identity = runId;
       const before = surface.conversation();
       await surface.submit(text, signal);
-      if (text.startsWith("<relay-context>") && /^\/(?:new|app|chat)?\/?$/.test(new URL(before).pathname)) {
-        for (let i = 0; i < 50 && surface.conversation() === before; i++) {
+      if (text.startsWith("<relay-context>") && isProvisionalConversation(before)) {
+        for (let i = 0; i < 100 && isProvisionalConversation(surface.conversation()); i++) {
           signal.throwIfAborted();
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        if (surface.conversation() !== before) {
-          signal.throwIfAborted();
-          await api("run.adopt", {}, identity);
-          route = surface.conversation();
-          run.adoptConversation(route);
-        }
+        signal.throwIfAborted();
+        if (!isProvisionalConversation(surface.conversation())) await followRoute(surface.conversation(), identity);
       }
     },
   };
@@ -49,7 +59,7 @@ if (profile && !agentHost.relayConversationAttached) {
     },
     publish: state => {
       const identity = runId;
-      publishing = publishing.catch(() => {}).then(() => api("run.update", { state }, identity)).then(() => {}).catch(error => { if (state.active && identity === runId) console.warn("[Relay state]", error); });
+      publishing = publishing.catch(() => {}).then(() => api("run.update", { state }, identity)).then(() => {}).catch(error => { if (state.active && identity === runId) report("[Relay state]", error); });
       if (state.error) console.error("[Relay run]", state.error);
     },
     present: (turn, action, result) => view.display(turn, action, result),
@@ -58,15 +68,30 @@ if (profile && !agentHost.relayConversationAttached) {
     now: () => Date.now(),
   });
 
-  chrome.runtime.onMessage.addListener((message: { method?: string; target?: WorkspaceTarget; runId?: string; access?: string }, sender, respond) => {
+  async function followRoute(next: string, identity = runId): Promise<void> {
+    if (next === route) return;
+    if (!adoption) adoption = api("run.adopt", {}, identity).then(() => {
+      route = next;
+      run.adoptConversation(next);
+    }).finally(() => { adoption = undefined; });
+    await adoption;
+  }
+
+  chrome.runtime.onMessage.addListener((message: { method?: string; target?: WorkspaceTarget; runId?: string; access?: string; turn?: string; action?: ActionRequest; result?: ActionResult }, sender, respond) => {
     if (sender.id !== chrome.runtime.id) return false;
     if (message.method === "conversation.inspect") { respond({ ok: true, protocol: 3 }); return false; }
     if (message.method === "conversation.begin") {
       target = message.target;
-      access = message.access === "full" ? "full" : "workspace";
+      access = message.access === "observe" ? "observe" : message.access === "autonomous" ? "autonomous" : "supervised";
       runId = message.runId || "";
       route = surface.conversation();
       void run.begin().then(() => respond({ ok: run.snapshot().active, error: run.snapshot().error }));
+      return true;
+    }
+    if (message.method === "conversation.completeApproval") {
+      const turn = surface.reply();
+      if (message.runId !== runId || !turn || turn.id !== message.turn || !message.action || !message.result) { respond({ ok: false, error: "The pending action is no longer visible in this conversation." }); return false; }
+      void run.completeApproval(turn, message.action, message.result).then(() => respond({ ok: true }));
       return true;
     }
     if (message.method === "conversation.stop") { if (message.runId === runId) run.stop(); respond({ ok: true }); }
@@ -74,21 +99,30 @@ if (profile && !agentHost.relayConversationAttached) {
   });
 
   document.addEventListener("keydown", event => {
-    if (event.isTrusted && event.key === "Enter" && !event.shiftKey && (event.target as HTMLElement)?.closest(profile.input)) run.expectReply();
+    const element = event.target instanceof Element ? event.target : (event.target as Node | null)?.parentElement;
+    if (event.isTrusted && event.key === "Enter" && !event.shiftKey && element?.closest(profile.input)) run.expectReply();
   }, true);
   document.addEventListener("click", event => {
-    if (event.isTrusted && (event.target as HTMLElement)?.closest(profile.send)) run.expectReply();
+    const element = event.target instanceof Element ? event.target : (event.target as Node | null)?.parentElement;
+    if (event.isTrusted && element?.closest(profile.send)) run.expectReply();
   }, true);
 
   let adapting = false;
   const tick = async () => {
-    if (adapting) return;
+    if (adapting || detached) return;
     adapting = true;
     try {
-      if (surface.conversation() !== route && run.snapshot().phase !== "preparing") {
-        run.stop();
-        await api("run.leave").catch(() => {});
-        route = surface.conversation();
+      const currentRoute = surface.conversation();
+      if (currentRoute !== route) {
+        if (run.snapshot().active && isProvisionalConversation(route) && !isProvisionalConversation(currentRoute)) {
+          await followRoute(currentRoute);
+        } else if (isProvisionalConversation(route) && isProvisionalConversation(currentRoute)) {
+          route = currentRoute;
+        } else if (run.snapshot().phase !== "preparing") {
+          run.stop();
+          await api("run.leave").catch(() => {});
+          route = currentRoute;
+        }
       }
       const latest = surface.reply();
       if (run.snapshot().active && latest && latest.id !== run.snapshot().lastTurn) view.pending(latest);
@@ -96,22 +130,30 @@ if (profile && !agentHost.relayConversationAttached) {
       view.maskInternalMessages(profile.user);
     } finally { adapting = false; }
   };
-  setInterval(() => { void tick().catch(error => console.error("[Relay]", error)); }, 600);
-  document.addEventListener("visibilitychange", () => { void tick(); });
+  ticker = setInterval(() => { void tick().catch(error => report("[Relay]", error)); }, 600);
+  document.addEventListener("visibilitychange", () => { void tick().catch(error => report("[Relay]", error)); });
   async function recover(attempt = 0): Promise<void> {
     if (run.snapshot().active) return;
     try {
       const saved = await api("run.status");
       if (run.snapshot().active) return;
       const state = saved.state as RunSnapshot | undefined;
-      if (state?.active) { target = saved.target as WorkspaceTarget; access = saved.access === "full" ? "full" : "workspace"; runId = String(saved.runId); await run.restore(state); }
+      if (state?.active) { target = saved.target as WorkspaceTarget; access = saved.access === "observe" ? "observe" : saved.access === "autonomous" ? "autonomous" : "supervised"; runId = String(saved.runId); await run.restore(state); }
     } catch (error) {
+      if (isExtensionContextInvalid(error)) { detach(); return; }
       if (attempt < 5) setTimeout(() => { void recover(attempt + 1); }, Math.min(5000, 500 * 2 ** attempt));
       else console.warn("[Relay recovery]", error);
     }
   }
   void recover();
-  const restoreCards = () => { view.historical(surface.history()); view.maskInternalMessages(profile.user); };
+  const restoreCards = () => {
+    try {
+      view.historical(surface.history());
+      view.maskInternalMessages(profile.user);
+    } catch (error) {
+      console.warn("[Relay cards]", error);
+    }
+  };
   setTimeout(restoreCards, 1000);
   let scrollTimer: ReturnType<typeof setTimeout>;
   document.addEventListener("scroll", () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(restoreCards, 400); }, true);

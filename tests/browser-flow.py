@@ -15,14 +15,17 @@ fixture = """<!doctype html><html><body style="background:#17191e;color:#eee;fon
 <script>
 let counter=Number(sessionStorage.getItem('fixtureCounter')||'0'), step=0;
 const history=sessionStorage.getItem('fixtureHistory');if(history)document.querySelector('main').innerHTML=history;
-const marker=location.pathname.endsWith('a')?'project A':'project B';
+const marker=location.search.includes('fixture=b')?'project B':'project A';
 document.querySelector('button').onclick=()=>{
  const input=document.querySelector('#prompt-textarea');const text=input.innerText.trim();if(!text)return;
- const user=document.createElement('div');user.dataset.userMessageBubble='';const content=document.createElement('span');content.textContent=text;user.append(content);document.querySelector('main').append(user);input.textContent='';
+ const user=document.createElement('div');user.dataset.userMessageBubble='';const content=document.createElement('span');content.textContent=text;user.append(content);document.querySelector('main').append(user);if(!location.search.includes('sticky=1')||!text.startsWith('<relay-'))input.textContent='';
  const stop=document.createElement('button');stop.dataset.testid='stop-button';stop.textContent='Stop';document.body.append(stop);
  setTimeout(()=>{
   let answer;
-  if(text.startsWith('<relay-context>'))answer='Workspace ready.';
+  if(text.startsWith('<relay-context>')){
+   answer='Workspace ready.';
+   if(location.pathname==='/'){window.history.replaceState({},'','/c/local-chatgpt%3Afixture');setTimeout(()=>window.history.replaceState({},'','/c/relay-fixture-a'),900);}
+  }
   else if(text.startsWith('<relay-receipt>')){
    if(step===1){step=2;answer=frame('workspace.readText',{path:'generated.txt'});}
    else{step=3;answer=text.includes(marker)?'Verified '+marker:'Verification failed';document.body.dataset.finished=answer;}
@@ -33,9 +36,12 @@ document.querySelector('button').onclick=()=>{
   const message=document.createElement('div');message.className='DilResponseRoot';message.dataset.dilMessageId='fixture-'+counter;
   const pre=document.createElement('pre');const code=document.createElement('code');
   if(answer.startsWith('<relay-action>')){
-   const explanation=document.createElement('p');explanation.textContent='Inspecting the selected workspace.';message.append(explanation);
-   const toolbar=document.createElement('div');toolbar.textContent='relay';pre.append(toolbar);
-   const virtual=document.createElement('div');virtual.className='cm-content';virtual.textContent='Only a virtualized preview is rendered';virtual.cmTile={view:{state:{doc:{length:answer.length,toString:()=>answer}}}};code.append(virtual);
+   if(step===1)code.textContent='Inspecting the selected workspace.\\n\\n'+answer;
+   else{
+    const explanation=document.createElement('p');explanation.textContent='Inspecting the selected workspace.';message.append(explanation);
+    const toolbar=document.createElement('div');toolbar.textContent='relay';pre.append(toolbar);
+    const virtual=document.createElement('div');virtual.className='cm-content';virtual.textContent='Only a virtualized preview is rendered';virtual.cmTile={view:{state:{doc:{length:answer.length,toString:()=>answer}}}};code.append(virtual);
+   }
   }else code.textContent=answer;
   pre.append(code);message.append(pre);classic.append(message);wrapper.append(classic);document.querySelector('main').append(wrapper);sessionStorage.setItem('fixtureCounter',String(counter));stop.remove();
  },150);
@@ -104,7 +110,8 @@ buildSync({absWorkingDir:source,entryPoints:{conversation:'src/conversation-entr
                     pages = []
                     for name in ["a", "b"]:
                         page = browser.new_page()
-                        page.goto("https://chatgpt.com/c/relay-fixture-" + name)
+                        sticky = "&sticky=1" if name == "a" and os.environ.get("RELAY_TEST_STICKY_COMPOSER") else ""
+                        page.goto("https://chatgpt.com/" if name == "a" and os.environ.get("RELAY_TEST_PROVISIONAL_ROUTE") else "https://chatgpt.com/c/relay-fixture?fixture=" + name + sticky)
                         page.wait_for_selector("#prompt-textarea")
                         pages.append(page)
                     if os.environ.get("RELAY_TEST_LATE_ATTACH"):
@@ -117,7 +124,7 @@ buildSync({absWorkingDir:source,entryPoints:{conversation:'src/conversation-entr
                     pairing = popup.evaluate("token => chrome.runtime.sendMessage({method:'control.pair',token})", token)
                     assert pairing["ok"], "Pairing should be approved only from the popup"
                     tabs = worker.evaluate("() => chrome.tabs.query({url:'https://chatgpt.com/*'})")
-                    tabIds = {entry["url"].rsplit("-", 1)[-1]: entry["id"] for entry in tabs}
+                    tabIds = {name: next(entry["id"] for entry in tabs if entry["url"] == page.url) for name, page in zip(["a", "b"], pages)}
 
                     def request(method, **fields):
                         return popup.evaluate("message => chrome.runtime.sendMessage(message)", {"method": method, **fields})
@@ -133,23 +140,32 @@ buildSync({absWorkingDir:source,entryPoints:{conversation:'src/conversation-entr
                     if os.environ.get("RELAY_TEST_STARTUP_FAILURE"):
                         pages[0].bring_to_front()
                         pages[0].locator('#prompt-textarea').fill("Keep this unsent draft")
-                        failed = request("control.start", tab=tabIds["a"], workspace=targets[str(roots[0].resolve())], access="workspace")
-                        assert failed.get("ok") is False and "unsent draft" in failed.get("error", ""), failed
-                        for attempt in range(3):
-                            popup.wait_for_timeout(1600)
-                            failure = request("control.status", tab=tabIds["a"])
-                            assert "unsent draft" in failure.get("error", ""), "Startup errors must survive popup status polling"
-                        assert pages[0].locator('#prompt-textarea').inner_text() == "Keep this unsent draft"
+                        preserved = request("control.start", tab=tabIds["a"], workspace=targets[str(roots[0].resolve())], access="supervised")
+                        assert preserved.get("ok"), preserved
+                        assert pages[0].locator('#prompt-textarea').inner_text() == "Keep this unsent draft", "Starting Relay must preserve the user's draft"
+                        request("control.stop", tab=tabIds["a"])
                         pages[0].locator('#prompt-textarea').fill("")
                     for page, name, folder in zip(pages, ["a", "b"], roots[:2]):
                         page.bring_to_front()
-                        started = request("control.start", tab=tabIds[name], workspace=targets[str(folder.resolve())], access="full" if name == "a" else "workspace", approved=name == "a")
+                        started = request("control.start", tab=tabIds[name], workspace=targets[str(folder.resolve())], access="autonomous" if name == "a" else "supervised", approved=name == "a")
                         assert started.get("ok"), started
-                        expectedAccess = "Access: Full access (approved for this session)." if name == "a" else "Access: Workspace."
+                        if name == "a" and os.environ.get("RELAY_TEST_PROVISIONAL_ROUTE"):
+                            page.wait_for_timeout(2000)
+                            transitioned = request("control.status", tab=tabIds[name])
+                            assert transitioned.get("state", {}).get("active"), "An optimistic ChatGPT URL becoming permanent must keep its workspace session"
+                        expectedAccess = "Access: Autonomous within the selected workspace." if name == "a" else "Access: Supervised."
                         assert expectedAccess in page.locator('main').text_content(), "Bootstrap must describe the actual selected access mode"
                         page.locator('#prompt-textarea').fill("Create a file and verify it")
                         page.locator('[data-testid="send-button"]').click()
-                        page.wait_for_function("document.body.dataset.finished?.startsWith('Verified')", timeout=30000)
+                        for _ in range(300):
+                            current = request("control.status", tab=tabIds[name])
+                            if current.get("pending"):
+                                approved = request("control.approve", tab=tabIds[name], actionId=current["pending"]["operation"])
+                                assert approved.get("ok"), approved
+                            if page.evaluate("document.body.dataset.finished?.startsWith('Verified')"):
+                                break
+                            page.wait_for_timeout(100)
+                        assert page.evaluate("document.body.dataset.finished?.startsWith('Verified')"), "Agent flow did not finish"
                         assert (folder / "generated.txt").read_text() == "project " + name.upper()
                         assert not page.locator('main').inner_text().startswith('<relay-action>')
                         assert page.locator('[data-relay-card]').count() >= 3
@@ -188,7 +204,7 @@ buildSync({absWorkingDir:source,entryPoints:{conversation:'src/conversation-entr
                     request("control.stop", tab=tabIds["a"])
                     assert request("control.status", tab=tabIds["b"])["state"]["active"], "Stopping A must not stop B"
                     pages[0].bring_to_front()
-                    replacement = request("control.start", tab=tabIds["a"], workspace=targets[str(roots[1].resolve())], access="workspace")
+                    replacement = request("control.start", tab=tabIds["a"], workspace=targets[str(roots[1].resolve())], access="supervised")
                     assert replacement.get("ok"), replacement
                     isolated = browser.new_cdp_session(pages[0])
                     worlds = []

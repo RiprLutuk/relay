@@ -153,10 +153,33 @@ async fn bridgeRoutesWorkspaceCapabilities() {
     assert_eq!(bound["ok"], true, "{bound}");
     let sessionId = bound["sessionId"].as_str().expect("session ID").to_owned();
 
+    let approval = "d".repeat(64);
+    let approval_source = format!("target/relay-policy-source-{}", std::process::id());
+    let approval_path = format!("target/relay-policy-moved-{}", std::process::id());
+    std::fs::write(env!("CARGO_MANIFEST_DIR").to_string() + "/" + &approval_source, "approval").unwrap();
+    let guarded = json!({"id": 12, "type": "capability.invoke", "token": token, "sessionId": sessionId, "workspaceId": workspaceId, "name": "workspace.move", "arguments": {"source": approval_source, "destination": approval_path}, "operationId": approval});
+    socket
+        .send(Message::Text(guarded.to_string().into()))
+        .await
+        .unwrap();
+    let waiting = nextJson(&mut socket).await;
+    assert_eq!(waiting["errorCode"], "APPROVAL_REQUIRED", "{waiting}");
+    socket.send(Message::Text(json!({"id": 13, "type": "session.approve", "token": token, "sessionId": sessionId, "workspaceId": workspaceId, "actionId": approval}).to_string().into())).await.unwrap();
+    assert_eq!(nextJson(&mut socket).await["ok"], true);
+    socket
+        .send(Message::Text(guarded.to_string().into()))
+        .await
+        .unwrap();
+    let approved = nextJson(&mut socket).await;
+    assert_eq!(approved["ok"], true, "{approved}");
+    std::fs::remove_file(env!("CARGO_MANIFEST_DIR").to_string() + "/" + &approval_path).unwrap();
+
     socket.send(Message::Text(json!({"id": 2, "type": "capability.invoke", "token": token, "sessionId": sessionId, "workspaceId": workspaceId, "name": listDir, "arguments": {"path": "."}, "timeout": 5_000}).to_string().into())).await.expect("call workspace tool");
     let result = nextJson(&mut socket).await;
     assert_eq!(result["type"], "actionResult");
     assert_eq!(result["ok"], true);
+    assert_eq!(result["status"], "completed");
+    assert!(result["durationMs"].is_number());
     assert!(
         result["text"]
             .as_str()
@@ -181,7 +204,7 @@ async fn bridgeRoutesWorkspaceCapabilities() {
     let access = nextJson(&mut socket).await;
     assert_eq!(access["type"], "accessState");
     assert_eq!(access["ok"], true, "{access}");
-    assert_eq!(access["access"], "full");
+    assert_eq!(access["access"], "autonomous");
 
     let (program, args) = if cfg!(windows) {
         ("cmd", vec!["/C", "echo relay-full-access"])

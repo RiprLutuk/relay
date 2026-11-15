@@ -182,3 +182,39 @@ fn workspaceModeRejectsShellExecution() {
         invalid[0]
     );
 }
+
+#[test]
+fn taskExecutionResolvesDependenciesAndReturnsStepReceipts() {
+    let root = std::env::temp_dir().join(format!("relay-task-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let result = fixtureCall(
+        &root,
+        "task.execute",
+        serde_json::json!({
+            "steps": [
+                {"id":"write","tool":"workspace.create","input":{"path":"result.txt","content":"agentic"}},
+                {"id":"read","tool":"workspace.readText","input":{"path":"result.txt"},"dependsOn":["write"]}
+            ],
+            "maxConcurrency": 4
+        }),
+    );
+    let structured = &result["result"]["structuredContent"]["result"];
+    assert_eq!(structured["status"], "completed", "{result}");
+    assert_eq!(structured["steps"][1]["result"], "agentic", "{result}");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn projectDescriptionReportsEvidenceDerivedContext() {
+    let root = std::env::temp_dir().join(format!("relay-context-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("package.json"), r#"{"name":"context-fixture","scripts":{"test":"node --test"},"dependencies":{"react":"latest"},"packageManager":"pnpm@10"}"#).unwrap();
+    std::fs::write(root.join("pnpm-workspace.yaml"), "packages: []\n").unwrap();
+    let result = fixtureCall(&root, "project.describe", serde_json::json!({}));
+    let context = &result["result"]["structuredContent"]["result"];
+    assert_eq!(context["packageManager"], "pnpm", "{result}");
+    assert_eq!(context["framework"], "react", "{result}");
+    assert_eq!(context["monorepo"], true, "{result}");
+    assert_eq!(context["testCommand"], "pnpm test", "{result}");
+    std::fs::remove_dir_all(root).unwrap();
+}

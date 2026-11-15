@@ -208,6 +208,8 @@ async fn routesSessionsByWindowAndRootAndFailsClosedOnTargetLoss() {
             "Full access rm must remove the test file"
         );
     }
+    let grant_a=request(&mut browser,token,json!({"type":"session.authorize","sessionId":sa["sessionId"],"workspaceId":wa,"access":"autonomous","confirm":true})).await;
+    assert_eq!(grant_a["ok"], true, "{grant_a}");
     let escaped = call(
         &mut browser,
         token,

@@ -39,6 +39,7 @@ async function main() {
     assert.equal(panel, undefined, 'Startup must not create a panel or take editor space');
     await commands.get('relay.openControlCenter')();
     assert.match(panel.webview.html, /id="copy-pairing"/, 'Copy pairing token must be visible before the first bridge poll');
+    assert.match(panel.webview.html, /latencyMs/, 'Control Center must expose measured bridge latency');
     await onMessage({ type: 'copy' });
     assert.equal(clipboard, token, 'Control Center button must invoke the registered copy command');
     clipboard = undefined;

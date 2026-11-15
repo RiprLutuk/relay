@@ -13,10 +13,10 @@ async function verify() {
     catalog: async () => [{ name: "workspace.list", server: "vscode", description: "List files", inputSchema: {} }],
     execute: async () => { calls++; return { ok: true, text: "src" }; },
     publish: state => states.push(state), present: () => {}, target: () => "project-a", now: () => clock,
-    access: () => "full",
+    access: () => "autonomous",
   }, 20);
   await run.begin();
-  assert.ok(sent[0]?.includes("Access: Full access (approved for this session)."), "The model must receive the session's approved access mode");
+  assert.ok(sent[0]?.includes("Access: Autonomous within the selected workspace."), "The model must receive the session's approved access mode");
   await run.observe(); clock += 100; await run.observe();
   assert.equal(calls, 0, "Opening a chat must not replay historical actions");
   turn = { ...turn, id: "new" }; generating = true;

@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { EditorSession } from "./editor-session";
 import * as vscode from "vscode";
 import { controlCenterHtml } from "./control-center";
+import { runtimeUpgradePlan } from "./runtime-lifecycle";
 const exec = promisify(execFile);
 let editorSession: EditorSession | undefined;
 let extensionDirectory = "";
@@ -25,6 +26,9 @@ type State = {
     servers: unknown[];
     access: string;
     activity: Event[];
+    phase: string;
+    latencyMs?: number;
+    lastHeartbeatAt?: number;
     error?: string;
 };
 function controlPath(): string {
@@ -52,9 +56,11 @@ async function snapshot(): Promise<State> {
     try {
         if (!editorSession) throw new Error("Open a trusted local project folder");
         const value = await editorSession.inspect();
-        return { online: true, alive: !!value.workspaceReady, tools: Array.isArray(value.tools) ? value.tools.length : 0, servers: value.servers as unknown[] || [], access: "workspace", activity: ((value.activity || []) as (Event & { workspaceId?: string })[]).filter(event => !event.workspaceId || editorSession!.workspaces.some(workspace => workspace.id === event.workspaceId)) };
+        const health = editorSession.status();
+        return { online: true, alive: !!value.workspaceReady, tools: Array.isArray(value.tools) ? value.tools.length : 0, servers: value.servers as unknown[] || [], access: "workspace", activity: ((value.activity || []) as (Event & { workspaceId?: string })[]).filter(event => !event.workspaceId || editorSession!.workspaces.some(workspace => workspace.id === event.workspaceId)), phase: health.phase, latencyMs: health.latencyMs, lastHeartbeatAt: health.lastHeartbeatAt };
     } catch (error) {
-        return { online: false, alive: false, tools: 0, servers: [], access: "workspace", activity: [], error: error instanceof Error ? error.message : String(error) };
+        const health = editorSession?.status();
+        return { online: false, alive: false, tools: 0, servers: [], access: "workspace", activity: [], phase: health?.phase || "disconnected", latencyMs: health?.latencyMs, lastHeartbeatAt: health?.lastHeartbeatAt, error: error instanceof Error ? error.message : String(error) };
     }
 }
 class ControlCenter implements vscode.Disposable {
@@ -81,6 +87,17 @@ class ControlCenter implements vscode.Disposable {
 }
 export function activate(context: vscode.ExtensionContext): void {
     extensionDirectory = context.extensionPath || "";
+    let runtimeUpgraded = false;
+    try {
+        const packageVersion = String(context.extension?.packageJSON?.version || JSON.parse(readFileSync(join(extensionDirectory, "package.json"), "utf8")).version || "");
+        const instance = readFileSync(join(stateDirectory(), "bridge-instance.json"), "utf8");
+        const upgrade = runtimeUpgradePlan(instance, packageVersion);
+        if (upgrade) {
+            process.kill(upgrade.pid);
+            runtimeUpgraded = true;
+        }
+    }
+    catch { }
     const browserSource = join(extensionDirectory, "runtime", "browser");
     const browserHome = join(stateDirectory(), "browser");
     if (extensionDirectory && existsSync(join(browserSource, "manifest.json"))) {
@@ -160,6 +177,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const auto = vscode.workspace.getConfiguration("relay").get<boolean>("autoStart");
     context.subscriptions.push(item, vscode.commands.registerCommand("relay.check", refresh), vscode.commands.registerCommand("relay.start", start), vscode.commands.registerCommand("relay.openControlCenter", () => center.show()), vscode.commands.registerCommand("relay.selectControlPath", choose), vscode.commands.registerCommand("relay.openBrowserExtension", () => vscode.env.openExternal(existsSync(join(browserHome, "manifest.json")) ? vscode.Uri.file(browserHome) : vscode.Uri.parse("https://github.com/RiprLutuk/relay/releases/latest"))), { dispose: () => clearInterval(timer) });
     const timer = setInterval(() => void refresh(), 2000);
-    void (async () => { await refresh(); if (auto && !(await snapshot()).online)
-        await start(); })();
+    void (async () => {
+        await refresh();
+        if (!auto || (!runtimeUpgraded && (await snapshot()).online)) return;
+        if (runtimeUpgraded) for (let attempt = 0; attempt < 20 && editorSession?.reachable(); attempt++) await new Promise(resolve => setTimeout(resolve, 100));
+        await start();
+    })();
 }

@@ -1,6 +1,7 @@
 import { BridgeLink, type BridgeMessage } from "./infrastructure/bridge-link";
 import { ensureConversation } from "./infrastructure/conversation-host";
 import type { ActivityEvent, Capability, RunSnapshot, WorkspaceBinding, WorkspaceTarget } from "./domain/contracts";
+import { conversationAddress, isProvisionalConversation } from "./domain/conversation-address";
 
 interface ConversationRecord {
   binding: WorkspaceBinding;
@@ -9,6 +10,7 @@ interface ConversationRecord {
   conversation: string;
   state: RunSnapshot;
   events: ActivityEvent[];
+  pending?: { turn: string; action: { tool: string; input: Record<string, unknown> }; operation: string };
 }
 
 const storageKey = "relay.conversations.v1";
@@ -21,7 +23,12 @@ let token = "";
 const link = new BridgeLink(() => {});
 const initialized = chrome.storage.local.get([storageKey, failureKey, "relayBridgeToken"]).then(saved => {
   token = typeof saved.relayBridgeToken === "string" && /^[a-f0-9]{64}$/i.test(saved.relayBridgeToken) ? saved.relayBridgeToken : "";
-  for (const record of (saved[storageKey] || []) as ConversationRecord[]) if (record?.binding?.sessionId && typeof record.conversation === "string") records.set(record.conversation, record);
+  for (const record of (saved[storageKey] || []) as ConversationRecord[]) {
+    if (!record?.binding?.sessionId || typeof record.conversation !== "string" || !Number.isInteger(record.tab)) continue;
+    record.conversation = conversationAddress(record.conversation, record.tab);
+    record.state.conversation = record.conversation;
+    records.set(record.conversation, record);
+  }
   if (Array.isArray(saved[failureKey])) for (const entry of saved[failureKey]) if (Array.isArray(entry) && typeof entry[0] === "string" && typeof entry[1] === "string") failures.set(entry[0], entry[1]);
   link.pair(token);
 });
@@ -34,9 +41,7 @@ function persist(): Promise<void> {
 }
 
 function conversationKey(url: string, tab: number): string {
-  const parsed = new URL(url);
-  const base = parsed.origin + parsed.pathname;
-  return /^\/(?:new|app|chat)?\/?$/.test(parsed.pathname) ? `${base}#draft-${tab}` : base;
+  return conversationAddress(url, tab);
 }
 
 async function tabContext(tab: number): Promise<{ tab: number; url: string; key: string }> {
@@ -90,7 +95,23 @@ async function handleControl(message: BridgeMessage): Promise<BridgeMessage> {
       try { await boundRequest(record, { type: "session.inspect" }); }
       catch (error) { record.state = { ...record.state, phase: "failed", active: false, error: String((error as Error).message) }; await persist(); }
     }
-    return { ok: true, paired: !!token, connected: link.ready(), changing: starting.has(context.key), runId: record?.binding.sessionId, error: failures.get(context.key) || link.problem, workspaces: response.workspaces || [], target: record?.target, state: record?.state, events: record?.events || [], access: record?.binding.access };
+    return { ok: true, paired: !!token, connected: link.ready(), changing: starting.has(context.key), runId: record?.binding.sessionId, error: failures.get(context.key) || link.problem, workspaces: response.workspaces || [], target: record?.target, state: record?.state, events: record?.events || [], access: record?.binding.access, pending: record?.pending };
+  }
+  if (message.method === "control.approve" || message.method === "control.reject") {
+    const record = ownedRecord(context.key, context.tab);
+    const pending = record.pending;
+    if (!pending || pending.operation !== message.actionId) throw new Error("This approval is no longer pending.");
+    let result: BridgeMessage;
+    if (message.method === "control.reject") {
+      result = { ok: false, actionId: pending.operation, status: "rejected", kind: "permissionDenied", errorCode: "PERMISSION_DENIED", error: "The user rejected this action." };
+    } else {
+      await boundRequest(record, { type: "session.approve", actionId: pending.operation });
+      result = await link.request({ type: "capability.invoke", sessionId: record.binding.sessionId, workspaceId: record.binding.workspaceId, name: pending.action.tool, arguments: pending.action.input, operationId: pending.operation, timeout: 120000 }, 135000);
+    }
+    record.pending = undefined;
+    await persist();
+    await chrome.tabs.sendMessage(record.tab, { method: "conversation.completeApproval", runId: record.binding.sessionId, turn: pending.turn, action: pending.action, result });
+    return { ok: true };
   }
   if (message.method === "control.stop") {
     if (starting.has(context.key)) throw new Error("This session is changing. Wait for the current transition.");
@@ -102,7 +123,8 @@ async function handleControl(message: BridgeMessage): Promise<BridgeMessage> {
   if (starting.has(context.key)) throw new Error("A workspace session is already starting.");
   const existing = records.get(context.key);
   if (existing?.state.active) throw new Error("Stop the current session before changing its workspace.");
-  if (message.access === "full" && message.approved !== true) throw new Error("Full access requires explicit approval in this popup.");
+  const access = message.access === "observe" ? "observe" : message.access === "autonomous" ? "autonomous" : "supervised";
+  if (access === "autonomous" && message.approved !== true) throw new Error("Autonomous access requires explicit approval in this popup.");
   starting.add(context.key);
   let record: ConversationRecord | undefined;
   try {
@@ -113,13 +135,13 @@ async function handleControl(message: BridgeMessage): Promise<BridgeMessage> {
     const bound = await link.request({ type: "session.open", workspaceId: message.workspace });
     if (bound.ok !== true) throw new Error(String(bound.error || "Workspace is unavailable."));
     record = {
-      binding: { sessionId: String(bound.sessionId), workspaceId: String(bound.workspaceId), bridgeId: String(bound.bridgeId), access: "workspace" },
+      binding: { sessionId: String(bound.sessionId), workspaceId: String(bound.workspaceId), bridgeId: String(bound.bridgeId), access: "supervised" },
       target: bound.workspace as unknown as WorkspaceTarget,
       tab: context.tab, conversation: context.key,
       state: { conversation: context.key, active: true, phase: "preparing" }, events: [],
     };
-    await boundRequest(record, { type: "session.authorize", access: message.access === "full" ? "full" : "workspace", confirm: message.access === "full" });
-    record.binding.access = message.access === "full" ? "full" : "workspace";
+    await boundRequest(record, { type: "session.authorize", access, confirm: access === "autonomous" });
+    record.binding.access = access;
     records.set(context.key, record);
     await persist();
     const reply = await chrome.tabs.sendMessage(context.tab, { method: "conversation.begin", target: record.target, runId: record.binding.sessionId, access: record.binding.access });
@@ -145,8 +167,8 @@ async function handleConversation(message: BridgeMessage, sender: chrome.runtime
     return { ok: true };
   }
   if (message.method === "run.adopt") {
-    const previous = [...records.values()].find(record => record.tab === tab && record.binding.sessionId === message.runId && record.conversation.includes(`#draft-${tab}`) && record.state.phase === "preparing");
-    if (!previous || !context.url.startsWith(new URL(previous.conversation).origin + "/")) throw new Error("Conversation changed. Start a new workspace session.");
+    const previous = [...records.values()].find(record => record.tab === tab && record.binding.sessionId === message.runId && isProvisionalConversation(record.conversation));
+    if (!previous || isProvisionalConversation(context.url) || new URL(context.url).origin !== new URL(previous.conversation).origin) throw new Error("Conversation changed. Start a new workspace session.");
     records.delete(previous.conversation);
     previous.conversation = context.key;
     previous.state.conversation = context.key;
@@ -188,6 +210,7 @@ async function handleConversation(message: BridgeMessage, sender: chrome.runtime
     const digest = await crypto.subtle.digest("SHA-256", bytes);
     const operation = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
     const result = await link.request({ type: "capability.invoke", sessionId: record.binding.sessionId, workspaceId: record.binding.workspaceId, name: action.tool, arguments: action.input, operationId: operation, timeout: 120000 }, 135000);
+    if (result.kind === "approvalRequired") record.pending = { turn: String(message.turn), action, operation };
     record.events.unshift({ at: Date.now(), phase: result.ok ? "waiting" : "failed", title: action.tool, detail: result.ok ? "Completed" : String(result.error || "Failed").slice(0, 500) });
     record.events = record.events.slice(0, 24);
     await persist();

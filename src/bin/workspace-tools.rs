@@ -132,7 +132,10 @@ async fn command(root: &Path, program: &str, args: &[String], timeout: u64) -> R
     const ALLOWED_COMMANDS: &[&str] = &[
         "cargo", "go", "just", "make", "npm", "pnpm", "yarn", "bun", "git", "python", "python3",
     ];
-    let fullAccess = env::var("RELAY_ACCESS_MODE").as_deref() == Ok("full");
+    let fullAccess = matches!(
+        env::var("RELAY_ACCESS_MODE").as_deref(),
+        Ok("full" | "autonomous")
+    );
     if !fullAccess && !ALLOWED_COMMANDS.contains(&program) {
         bail!(
             "Workspace mode blocks '{program}'. Full access permits any installed executable and toolchain. Allowed in Workspace mode: {}.",
@@ -179,6 +182,7 @@ async fn command(root: &Path, program: &str, args: &[String], timeout: u64) -> R
 
 fn tools() -> Value {
     json!([
+     {"name":"task.execute","description":"Execute a dependency-aware batch of workspace tools and return partial results.","inputSchema":{"type":"object","properties":{"steps":{"type":"array","maxItems":50,"items":{"type":"object","properties":{"id":{"type":"string"},"tool":{"type":"string"},"input":{"type":"object"},"dependsOn":{"type":"array","items":{"type":"string"}}},"required":["id","tool"]}},"stopOnError":{"type":"boolean"},"maxConcurrency":{"type":"integer","minimum":1,"maximum":8}},"required":["steps"]}},
      {"name":"workspace.describe","description":"Get the active VS Code workspace name, path, and Git status.","inputSchema":{"type":"object","properties":{},"required":[]}},
      {"name":"project.describe","description":"Inspect common project manifests and package scripts.","inputSchema":{"type":"object","properties":{},"required":[]}},
      {"name":"workspace.list","description":"List files and folders in the workspace.","inputSchema":{"type":"object","properties":{"path":{"type":"string"}},"required":[]}},
@@ -210,11 +214,110 @@ async fn call(name: &str, a: &Value) -> Result<Value> {
     let root = boundWorkspaceRoot()?;
     let s = |k: &str| a[k].as_str().unwrap_or("");
     match name {
+        "task.execute" => {
+            let steps = a["steps"].as_array().context("steps must be an array")?;
+            if steps.is_empty() || steps.len() > 50 {
+                bail!("A task requires between 1 and 50 steps.")
+            }
+            let mut remaining = steps.clone();
+            let mut completed = HashSet::new();
+            let mut results = Vec::new();
+            let stop = a["stopOnError"].as_bool().unwrap_or(true);
+            let concurrency = a["maxConcurrency"].as_u64().unwrap_or(4).clamp(1, 8) as usize;
+            while !remaining.is_empty() {
+                let ready = remaining
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, step)| {
+                        let dependencies =
+                            step["dependsOn"].as_array().cloned().unwrap_or_default();
+                        dependencies
+                            .iter()
+                            .all(|dependency| {
+                                dependency.as_str().is_some_and(|id| completed.contains(id))
+                            })
+                            .then_some(index)
+                    })
+                    .collect::<Vec<_>>();
+                if ready.is_empty() {
+                    bail!("Task dependencies contain a cycle or an unknown step.")
+                }
+                let mut wave = ready
+                    .into_iter()
+                    .rev()
+                    .map(|index| remaining.remove(index))
+                    .collect::<Vec<_>>();
+                wave.reverse();
+                while !wave.is_empty() {
+                    let firstMutating = wave.iter().position(|step| {
+                        !matches!(
+                            step["tool"].as_str().unwrap_or(""),
+                            "workspace.describe"
+                                | "project.describe"
+                                | "workspace.list"
+                                | "workspace.tree"
+                                | "workspace.find"
+                                | "workspace.search"
+                                | "workspace.readText"
+                                | "workspace.readBatch"
+                                | "workspace.read"
+                                | "workspace.stat"
+                                | "code.outline"
+                                | "vcs.status"
+                                | "vcs.diff"
+                                | "vcs.log"
+                                | "vcs.branches"
+                        )
+                    });
+                    let take = if firstMutating == Some(0) {
+                        1
+                    } else {
+                        firstMutating.unwrap_or(wave.len()).min(concurrency).max(1)
+                    };
+                    let batch = wave.drain(..take).collect::<Vec<_>>();
+                    let outcomes =
+                        futures_util::future::join_all(batch.into_iter().map(|step| async move {
+                            let id = step["id"].as_str().unwrap_or("").to_owned();
+                            let tool = step["tool"].as_str().unwrap_or("").to_owned();
+                            if id.is_empty() || tool.is_empty() || tool == "task.execute" {
+                                return (id, tool, Err(anyhow!("Invalid or nested task step")));
+                            }
+                            let input = if step["input"].is_object() {
+                                step["input"].clone()
+                            } else {
+                                json!({})
+                            };
+                            let result = Box::pin(call(&tool, &input)).await;
+                            (id, tool, result)
+                        }))
+                        .await;
+                    for (id, tool, outcome) in outcomes {
+                        match outcome {
+                            Ok(value) => {
+                                completed.insert(id.clone());
+                                results.push(json!({"id":id,"tool":tool,"status":"completed","result":value}));
+                            }
+                            Err(error) => {
+                                results.push(json!({"id":id,"tool":tool,"status":"failed","error":error.to_string()}));
+                                if stop {
+                                    return Ok(
+                                        json!({"status":"partiallyCompleted","steps":results}),
+                                    );
+                                }
+                                completed.insert(id);
+                            }
+                        }
+                    }
+                }
+            }
+            Ok(json!({"status":"completed","steps":results}))
+        }
         "workspace.describe" => Ok(
             json!({"name":root.file_name().unwrap_or_default().to_string_lossy(),"path":root,"isGitRepository":root.join(".git").exists()}),
         ),
         "project.describe" => {
             let mut manifests = Vec::new();
+            let mut package = Value::Null;
             for n in [
                 "package.json",
                 "pyproject.toml",
@@ -230,12 +333,76 @@ async fn call(name: &str, a: &Value) -> Result<Value> {
                     {
                         e["name"] = v["name"].clone();
                         e["scripts"] = v["scripts"].clone();
+                        package = v;
                     }
                     manifests.push(e)
                 }
             }
+            let manager = if root.join("pnpm-lock.yaml").exists()
+                || package["packageManager"]
+                    .as_str()
+                    .is_some_and(|v| v.starts_with("pnpm"))
+            {
+                "pnpm"
+            } else if root.join("yarn.lock").exists()
+                || package["packageManager"]
+                    .as_str()
+                    .is_some_and(|v| v.starts_with("yarn"))
+            {
+                "yarn"
+            } else if root.join("bun.lock").exists()
+                || root.join("bun.lockb").exists()
+                || package["packageManager"]
+                    .as_str()
+                    .is_some_and(|v| v.starts_with("bun"))
+            {
+                "bun"
+            } else if package.is_object() {
+                "npm"
+            } else {
+                ""
+            };
+            let dependencies = package["dependencies"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .chain(package["devDependencies"].as_object().into_iter().flatten())
+                .map(|(name, _)| name.as_str())
+                .collect::<HashSet<_>>();
+            let framework = [
+                "next", "react", "vue", "svelte", "angular", "express", "fastify",
+            ]
+            .into_iter()
+            .find(|name| dependencies.contains(name))
+            .unwrap_or("");
+            let language = if root.join("Cargo.toml").exists() {
+                "rust"
+            } else if root.join("go.mod").exists() {
+                "go"
+            } else if package.is_object() {
+                "typescript/javascript"
+            } else if root.join("pyproject.toml").exists() {
+                "python"
+            } else {
+                "unknown"
+            };
+            let testCommand = if package["scripts"]["test"].is_string() && !manager.is_empty() {
+                format!("{manager} test")
+            } else if root.join("Cargo.toml").exists() {
+                "cargo test".into()
+            } else if root.join("pyproject.toml").exists() {
+                "python -m pytest".into()
+            } else {
+                String::new()
+            };
+            let monorepo = root.join("pnpm-workspace.yaml").exists()
+                || package["workspaces"].is_array()
+                || root.join("Cargo.toml").is_file()
+                    && fs::read_to_string(root.join("Cargo.toml"))
+                        .unwrap_or_default()
+                        .contains("[workspace]");
             Ok(
-                json!({"workspace":root.file_name().unwrap_or_default().to_string_lossy(),"manifests":manifests}),
+                json!({"workspace":root.file_name().unwrap_or_default().to_string_lossy(),"language":language,"framework":framework,"packageManager":manager,"testCommand":testCommand,"monorepo":monorepo,"manifests":manifests,"evidence":manifests.iter().map(|entry|entry["path"].clone()).collect::<Vec<_>>() }),
             )
         }
         "workspace.list" => {
