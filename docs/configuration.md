@@ -20,7 +20,7 @@ Every window registers all workspace roots. Changing that window's root set, clo
 | `RELAY_CONFIG` | Explicit custom-server configuration file |
 | `RELAY_WORKSPACE` | Explicit CLI/headless root; normal editor sessions register roots directly |
 
-The runtime binds to loopback and requires its pairing token. Full access is session-scoped; it does not elevate other conversations.
+The runtime binds to loopback and requires its pairing token. Autonomous access is session-scoped; it does not elevate other conversations.
 
 ## Optional CLI
 

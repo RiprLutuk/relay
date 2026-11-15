@@ -38,9 +38,9 @@ You do not need to clone this repo, build anything or run `relayctl start`.
 
 | OS | Download |
 | --- | --- |
-| Windows | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.0/relay-workspace-1.0.0-win32-x64.vsix) |
-| Linux | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.0/relay-workspace-1.0.0-linux-x64.vsix) · [ARM64](https://github.com/RiprLutuk/relay/releases/download/v1.0.0/relay-workspace-1.0.0-linux-arm64.vsix) |
-| macOS | [Intel](https://github.com/RiprLutuk/relay/releases/download/v1.0.0/relay-workspace-1.0.0-darwin-x64.vsix) · [Apple Silicon](https://github.com/RiprLutuk/relay/releases/download/v1.0.0/relay-workspace-1.0.0-darwin-arm64.vsix) |
+| Windows | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-win32-x64.vsix) |
+| Linux | [x64](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-linux-x64.vsix) · [ARM64](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-linux-arm64.vsix) |
+| macOS | [Intel](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-darwin-x64.vsix) · [Apple Silicon](https://github.com/RiprLutuk/relay/releases/download/v1.0.1/relay-workspace-1.0.1-darwin-arm64.vsix) |
 
 > Windows and Linux packages are cross-built. Direct editor integration tests were run on macOS. See [verification](docs/verification.md).
 
@@ -88,8 +88,8 @@ Each conversation keeps its own project, even if you switch editor windows. Pair
 | Mode | What the AI can do |
 | --- | --- |
 | **Observe** | Read-only inspection. Mutations and commands are denied. |
-| **Supervised** | Reads run directly; each change or command requires exact-action approval. |
-| **Autonomous** | Approved tools may act without per-action prompts inside the selected project. |
+| **Supervised** | Workspace edits and safe project checks run directly; risky process or move actions require exact-action approval. |
+| **Autonomous** | Full filesystem and command access without per-action prompts after explicit session confirmation. |
 
 Autonomous mode is not an OS sandbox: project scripts and tools run as your user. Only open projects you trust. Details are in [SECURITY.md](SECURITY.md).
 

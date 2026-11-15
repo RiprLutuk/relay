@@ -5,7 +5,7 @@ Bridge protocol `3` uses JSON messages over a loopback WebSocket. Browser client
 ## Action lifecycle
 
 1. `session.open` binds a workspace.
-2. `session.authorize` selects Workspace or Full access.
+2. `session.authorize` selects Observe, Supervised or Autonomous access.
 3. `capability.list` returns the current catalog.
 4. `capability.invoke` carries `sessionId`, `workspaceId`, tool arguments and a SHA-256 `operationId`.
 5. `actionResult` returns `actionId`, `status`, `durationMs`, output or a stable `errorCode`.

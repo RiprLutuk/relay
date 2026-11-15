@@ -5,8 +5,8 @@ Relay binds only to loopback and authenticates clients with a local token. Works
 | Mode | Boundary |
 | --- | --- |
 | Observe | Only inspection, search, reads and read-only Git operations. |
-| Supervised | Reads run directly; mutations and commands require approval for their exact action identity. |
-| Autonomous | Catalogued tools may run without per-action prompts while file paths remain inside the selected root. |
+| Supervised | Workspace edits and safe project scripts run directly; arbitrary processes, moves and mixed-risk batches require exact-action approval. |
+| Autonomous | Full filesystem and installed-command access without per-action prompts after explicit session confirmation. |
 
 Autonomous access is not privilege elevation or an OS sandbox; commands still run as the current OS user and may execute trusted project code.
 

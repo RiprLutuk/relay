@@ -47,7 +47,10 @@ fn boundWorkspaceRoot() -> Result<PathBuf> {
 }
 
 fn target(root: &Path, input: &str) -> Result<PathBuf> {
-    let fullAccess = env::var("RELAY_ACCESS_MODE").as_deref() == Ok("full");
+    let fullAccess = matches!(
+        env::var("RELAY_ACCESS_MODE").as_deref(),
+        Ok("full" | "autonomous")
+    );
     targetWithAccess(root, input, fullAccess)
 }
 

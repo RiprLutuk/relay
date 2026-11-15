@@ -12,7 +12,7 @@ The suite type-checks browser source and build tooling, bundles the extension, t
 
 Native integration covers multiple editor connections, multiple roots, immutable session targets, permission isolation, missing bindings, changed roots and closed owners. Execution-journal tests coalesce concurrent retries and reject operation identities reused with another payload. A running process must not block heartbeat replies; closing its owner must cancel its descendants.
 
-Full-access command tests execute an absolute-path binary outside the Workspace allowlist and, on Unix, remove a temporary file with `rm`. The neighboring Workspace session must still reject the unrestricted executable. Browser bootstrap tests verify that the model receives the selected mode, including its approved Full access scope.
+Autonomous command tests execute an absolute-path binary outside the Supervised allowlist and, on Unix, remove a temporary file with `rm`. The neighboring Supervised session must still reject the unrestricted executable. Browser bootstrap tests verify that the model receives the selected mode, including its approved Autonomous scope.
 
 ## Browser-to-workspace fixture
 
@@ -26,7 +26,7 @@ Build native binaries and the editor extension first (`cargo build --bins`, `npm
 
 This test loads the actual unpacked extension in a fresh browser profile and connects it to real `EditorSession` implementations and the Rust/MCP runtime on an isolated port. Three roots are registered. Two conversations create and read different files in their selected roots, return receipts to their chat fixtures and finish independently. It also verifies virtualized CodeMirror text, readable history after reload, no historical replay, session recovery after stopping the service worker, fresh results after an external edit, independent stop and a 360px layout. After a stopped conversation starts again on another root, a delayed action carrying its old run identity must be rejected without writing to either root.
 
-Set `RELAY_TEST_LATE_ATTACH=1` to open the chat before its content script is registered: Start must attach the real agent without a page reload. Set `RELAY_TEST_STARTUP_FAILURE=1` to verify an unsent draft stays untouched and the startup error survives status polling. One conversation uses explicitly approved Full access; the other uses Workspace access.
+Set `RELAY_TEST_LATE_ATTACH=1` to open the chat before its content script is registered: Start must attach the real agent without a page reload. Set `RELAY_TEST_STARTUP_FAILURE=1` to verify an unsent draft stays untouched and the startup error survives status polling. One conversation uses explicitly approved Autonomous access; the other uses Supervised access.
 
 Set `RELAY_TEST_STICKY_COMPOSER=1` to verify that a newly rendered user turn confirms internal message delivery even when ChatGPT leaves the submitted text in its composer. Relay clears that stale internal text without replaying the message.
 
@@ -54,7 +54,7 @@ The script uses temporary profiles and the local VSIX. Leave `RELAY_TEST_EDITOR`
 
 Signed-in **Claude in Brave 156.1.98.60 on macOS** was verified live. A pre-existing tab first reproduced the missing content-script error, then Start attached the fixed agent without reloading the chat. A new conversation created `target/relay-live-check.txt` containing `Relay berhasil`, read it back through `workspace.readText`, returned both receipts and settled without an error. The test output is ignored by Git.
 
-The same conversation was explicitly switched to Full access. It created another temporary probe, removed it through `process.run` with `rm`, then used `sh` to verify its absence. Both process calls completed and the session returned to waiting. Full access accepts any installed executable; it does not require a separate language integration or allowlist entry.
+The same conversation was explicitly switched to Autonomous access. It created another temporary probe, removed it through `process.run` with `rm`, then used `sh` to verify its absence. Both process calls completed and the session returned to waiting. Autonomous access accepts any installed executable; it does not require a separate language integration or allowlist entry.
 
 ChatGPT's current coverage remains the deterministic fixture. Other providers and operating systems need their own live verification.
 

@@ -156,7 +156,11 @@ async fn bridgeRoutesWorkspaceCapabilities() {
     let approval = "d".repeat(64);
     let approval_source = format!("target/relay-policy-source-{}", std::process::id());
     let approval_path = format!("target/relay-policy-moved-{}", std::process::id());
-    std::fs::write(env!("CARGO_MANIFEST_DIR").to_string() + "/" + &approval_source, "approval").unwrap();
+    std::fs::write(
+        env!("CARGO_MANIFEST_DIR").to_string() + "/" + &approval_source,
+        "approval",
+    )
+    .unwrap();
     let guarded = json!({"id": 12, "type": "capability.invoke", "token": token, "sessionId": sessionId, "workspaceId": workspaceId, "name": "workspace.move", "arguments": {"source": approval_source, "destination": approval_path}, "operationId": approval});
     socket
         .send(Message::Text(guarded.to_string().into()))

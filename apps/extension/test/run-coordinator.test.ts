@@ -16,7 +16,7 @@ async function verify() {
     access: () => "autonomous",
   }, 20);
   await run.begin();
-  assert.ok(sent[0]?.includes("Access: Autonomous within the selected workspace."), "The model must receive the session's approved access mode");
+  assert.ok(sent[0]?.includes("Access: Autonomous (explicitly approved for this conversation)."), "The model must receive the session's approved access mode");
   await run.observe(); clock += 100; await run.observe();
   assert.equal(calls, 0, "Opening a chat must not replay historical actions");
   turn = { ...turn, id: "new" }; generating = true;

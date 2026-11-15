@@ -153,7 +153,7 @@ buildSync({absWorkingDir:source,entryPoints:{conversation:'src/conversation-entr
                             page.wait_for_timeout(2000)
                             transitioned = request("control.status", tab=tabIds[name])
                             assert transitioned.get("state", {}).get("active"), "An optimistic ChatGPT URL becoming permanent must keep its workspace session"
-                        expectedAccess = "Access: Autonomous within the selected workspace." if name == "a" else "Access: Supervised."
+                        expectedAccess = "Access: Autonomous (explicitly approved for this conversation)." if name == "a" else "Access: Supervised."
                         assert expectedAccess in page.locator('main').text_content(), "Bootstrap must describe the actual selected access mode"
                         page.locator('#prompt-textarea').fill("Create a file and verify it")
                         page.locator('[data-testid="send-button"]').click()

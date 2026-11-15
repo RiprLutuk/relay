@@ -13,7 +13,7 @@
 <header><img src="relay-mark.svg" alt=""><b>Relay</b><span id="connection">Connecting…</span></header>
 <label for="workspace">Project</label><select id="workspace"><option value="">Waiting for editor…</option></select>
 <label for="access">Access for this conversation</label><select id="access"><option value="observe">Observe</option><option value="supervised" selected>Supervised</option><option value="autonomous">Autonomous</option></select>
-<label id="approval" hidden><input id="approve" type="checkbox"><span>Allow approved tools to act autonomously inside this project for this conversation.</span></label>
+<label id="approval" hidden><input id="approve" type="checkbox"><span>Allow files outside this project and any installed command for this conversation.</span></label>
 <button id="begin" disabled>Start session</button><button id="stop" hidden>Stop session</button>
 <section id="pending" hidden><label>Approval required</label><pre id="pending-detail"></pre><div><button id="reject-action">Reject</button><button id="allow-action">Approve once</button></div></section>
 <p id="notice" role="status" aria-live="polite"></p><ul id="activity" aria-label="Recent activity"></ul>
